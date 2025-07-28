@@ -4,7 +4,6 @@ from rest_framework import status, generics
 from rest_framework.response import Response
 from django.conf import settings
 from .models import CustomUser,ActivationEmailLog,PasswordResetEmailLog
-from rest_framework import generics
 from .serializers import (ResendActivationEmailSerializer,
                             CustomPasswordResetSerializer,
                             CustomPasswordResetConfirmSerializer,
@@ -17,19 +16,17 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth.tokens import default_token_generator
 from datetime import timedelta
 from django.utils import timezone
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny,IsAuthenticated
 from django.contrib.auth import get_user_model
 from google.auth.transport.requests import Request
 from google.oauth2 import id_token
 from rest_framework.generics import GenericAPIView
-
+from rest_framework_simplejwt.exceptions import TokenError
 import requests
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.conf import settings
 from accounts.email import CustomActivationEmail
 from rest_framework_simplejwt.views import TokenRefreshView
-from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 
@@ -437,34 +434,52 @@ class FacebookLoginView(GenericAPIView):
             )
 
         return response
-    
-       
-@method_decorator(ensure_csrf_cookie, name='dispatch')
+
+
 class CookieTokenRefreshView(TokenRefreshView):
-    permission_classes=[AllowAny]
+    permission_classes = [AllowAny]
+
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get('refresh_token')
-        if refresh_token is None:
+        if not refresh_token:
             return Response({'error': 'No refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
+            # Validate and rotate the token
             token = RefreshToken(refresh_token)
-            access_token = str(token.access_token)
+            new_access_token = str(token.access_token)
+
+            # If rotating, generate a new refresh token
+            if True:  # Optional: check your settings
+                new_refresh_token = str(token)
+                token.blacklist()  # Blacklist old one if setting is enabled
+
+            # Create response and set new tokens
             response = Response({'message': 'Token refreshed'}, status=status.HTTP_200_OK)
             response.set_cookie(
                 key='access_token',
-                value=access_token,
+                value=new_access_token,
                 httponly=True,
-                secure=True,
+                secure=True,  # False for development
                 samesite='Lax',
                 max_age=60 * 60
             )
+            response.set_cookie(
+                key='refresh_token',
+                value=new_refresh_token,
+                httponly=True,
+                secure=True,
+                samesite='Lax',
+                max_age=7 * 24 * 60 * 60
+            )
             return response
-        except Exception:
-            return Response({'error': 'Invalid token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        except TokenError:
+            return Response({'error': 'Invalid or expired refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class CookieTokenObtainPairView(TokenObtainPairView):
     permission_classes = [AllowAny]
+
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
 
@@ -472,13 +487,15 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             refresh = response.data.get('refresh')
             access = response.data.get('access')
 
-            # Set HttpOnly cookies
-            res = Response({'message': 'Login successful'}, status=status.HTTP_200_OK)
+            # Return only a success message (tokens go in cookies)
+            res = Response({'message': 'Login successful','access': access,
+                            'refresh': refresh}, status=status.HTTP_200_OK)
+
             res.set_cookie(
                 key='access_token',
                 value=access,
                 httponly=True,
-                secure=True,  # Set to False in development
+                secure=True,  # Use False during local dev
                 samesite='Lax',
                 max_age=60 * 60  # 1 hour
             )
@@ -490,11 +507,14 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 samesite='Lax',
                 max_age=7 * 24 * 60 * 60  # 7 days
             )
+
             return res
+
+        # Return original response if login fails (e.g. 401)
         return response
     
 class LogoutView(APIView):
-    permission_classes=[AllowAny]
+    permission_classes=[IsAuthenticated]
     def post(self, request):
         try:
             refresh_token = request.COOKIES.get('refresh_token')

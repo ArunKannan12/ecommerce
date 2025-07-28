@@ -27,6 +27,7 @@ class UserSerializer(serializers.ModelSerializer):
     
     def validate(self, attrs):
         password = attrs.get('password')
+        
         if password:
             user = self.instance or CustomUser(email=attrs.get('email', 'example@example.com'))
             validate_password(password, user)
