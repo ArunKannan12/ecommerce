@@ -284,6 +284,7 @@ class GoogleAuthView(APIView):
                 'full_name': user.get_full_name(),
                 'first_name': user.first_name,
                 'last_name': user.last_name,
+                'role':user.role,
                 'social_auth_pro_pic': user.social_auth_pro_pic,
                 'auth_provider': user.auth_provider,
                 'is_new_user': created,
@@ -388,6 +389,7 @@ class FacebookLoginView(GenericAPIView):
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
+                
                 is_verified=True,
                 is_active=True,
                 auth_provider='facebook',
@@ -403,6 +405,7 @@ class FacebookLoginView(GenericAPIView):
             'full_name': user.get_full_name(),
             'first_name': user.first_name,
             'last_name': user.last_name,
+            'role':user.role,
             'auth_provider': 'facebook',
             'is_new_user': created,
             'is_staff': user.is_staff,
@@ -488,8 +491,21 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             access = response.data.get('access')
 
             # Return only a success message (tokens go in cookies)
-            res = Response({'message': 'Login successful','access': access,
-                            'refresh': refresh}, status=status.HTTP_200_OK)
+            user = CustomUser.objects.get(email=request.data.get('email'))
+            if not user.is_verified:
+                return Response({'error':'user in not verified'},status=status.HTTP_403_FORBIDDEN)
+            res = Response({
+                'message': 'Login successful'
+                ,'access': access,
+                'refresh': refresh,
+                'email':user.email,
+                'role':user.role,
+
+                'first_name': user.first_name,
+                'last_name': user.last_name
+                },
+                  status=status.HTTP_200_OK)
+            
 
             res.set_cookie(
                 key='access_token',

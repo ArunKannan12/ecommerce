@@ -43,7 +43,13 @@ class CustomUserManager(BaseUserManager):
 def user_profile_upload_path(instance, filename):
     return f'profile_pics/{instance.email}/{filename}'
 
-    
+ROLE_CHOICES = [
+        ('customer', 'Customer'),
+        ('promoter', 'Promoter'),
+        ('investor', 'Investor'),
+        ('admin', 'Admin'),
+    ] 
+
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=30)
@@ -53,6 +59,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_verified = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
+
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='customer')
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
