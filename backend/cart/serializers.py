@@ -16,11 +16,9 @@ class CartSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 class CartItemSerializer(serializers.ModelSerializer):
-    cart=CartSerializer(read_only=True)
-    cart_id=serializers.PrimaryKeyRelatedField(queryset=Cart.objects.all(),write_only=True)
     product_variant=ProductVariantSerializer(read_only=True)
     product_variant_id=serializers.PrimaryKeyRelatedField(queryset=ProductVariant.objects.all(),write_only=True)
     class Meta:
         model=CartItem
-        fields=['id','cart','cart_id','product_variant','product_variant_id','quantity']
-        read_only_fields = ['id']
+        fields=['id','product_variant','product_variant_id','quantity','added_at']
+        read_only_fields = ['id','added_at']

@@ -15,6 +15,7 @@ class CartItem(models.Model):
     cart=models.ForeignKey(Cart,on_delete=models.CASCADE)
     product_variant=models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
     quantity=models.IntegerField(default=1)
+    added_at=models.DateTimeField( auto_now_add=True)
 
     class Meta:
         unique_together = ('cart', 'product_variant')
