@@ -1,7 +1,5 @@
-from django.shortcuts import render
 from rest_framework.generics import ListCreateAPIView,RetrieveUpdateDestroyAPIView
-from rest_framework.permissions import AllowAny
-from .serializers import CartItemSerializer,CartSerializer
+from .serializers import CartItemSerializer
 from .models import CartItem,Cart
 from rest_framework.exceptions import ValidationError
 from accounts.permissions import IsCustomer
@@ -15,27 +13,37 @@ class CartItemListCreateApiView(ListCreateAPIView):
         return CartItem.objects.filter(cart__user=self.request.user)
     
     def perform_create(self, serializer):
-        cart,_=Cart.objects.get_or_create(user=self.request.user)
-        variant=serializer.validated_data.get('product_variant_id')
-        quantity=serializer.validated_data.get('quantity')
+        cart, _ = Cart.objects.get_or_create(user=self.request.user)
+        product_variant = serializer.validated_data.get('product_variant_id')  # FIXED HERE
+        quantity = serializer.validated_data.get('quantity')
 
-        if variant.stock < quantity:
+        if product_variant is None or quantity is None:
+            raise ValidationError("Missing variant or quantity")
+
+        if product_variant.stock is None or product_variant.stock < quantity:
             raise ValidationError('Not enough stock')
-        existing_item=CartItem.objects.filter(cart=cart,product_variant=variant).first()
-        if existing_item:
-            new_quantity=existing_item.quantity + quantity
 
-            if new_quantity > variant.stock:
+        existing_item = CartItem.objects.filter(cart=cart, product_variant=product_variant).first()
+
+        if existing_item:
+            new_quantity = existing_item.quantity + quantity
+
+            if product_variant.stock < new_quantity:
                 raise ValidationError('Not enough stock for the total quantity')
+
             existing_item.quantity = new_quantity
             existing_item.save()
         else:
-            serializer.save(cart=cart)
+            serializer.save(cart=cart, product_variant=product_variant)
+
 
 class CartItemRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
     serializer_class=CartItemSerializer
     permission_classes=[IsCustomer]
     lookup_field='id'
+
+    def get_queryset(self):
+        return CartItem.objects.filter(cart__user=self.request.user)
 
     def perform_update(self, serializer):
         item=serializer.instance

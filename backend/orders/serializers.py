@@ -11,17 +11,24 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
         read_only_fields=['user']
 
 class OrderSerializer(serializers.ModelSerializer):
-    shipping_address=ShippingAddressSerializer(read_only=True)
-    shipping_address_id=serializers.PrimaryKeyRelatedField(queryset=ShippingAddress.objects.all(),write_only=True)
+    shipping_address = ShippingAddressSerializer(read_only=True)
+    shipping_address_id = serializers.PrimaryKeyRelatedField(
+        queryset=ShippingAddress.objects.all(),
+        write_only=True
+    )
 
     class Meta:
-        model=Order
-        fields=['id','shipping_address',
-                'shipping_address_id','status',
-                'total','payment_method','is_paid',
-                'paid_at','created_at'
-                ]
-        read_only_fields = ['status', 'is_paid', 'paid_at', 'created_at']
+        model = Order
+        fields = [
+            'id','shipping_address','shipping_address_id',
+            'status','total','payment_method','is_paid',
+            'tracking_number','shipped_at','delivered_at','paid_at',
+            'created_at','updated_at',
+        ]
+        read_only_fields = [
+            'status','is_paid','tracking_number','shipped_at',
+            'delivered_at','paid_at','created_at','updated_at',
+        ]
 
 class OrderItemSerializer(serializers.ModelSerializer):
     order=OrderSerializer(read_only=True)

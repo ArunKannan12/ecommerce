@@ -22,3 +22,8 @@ class CartItemSerializer(serializers.ModelSerializer):
         model=CartItem
         fields=['id','product_variant','product_variant_id','quantity','added_at']
         read_only_fields = ['id','added_at']
+        
+    def create(self, validated_data):
+        # Convert product_variant_id into product_variant
+        validated_data['product_variant'] = validated_data.pop('product_variant_id')
+        return super().create(validated_data)
