@@ -11,6 +11,8 @@ from .models import Order,OrderItem
 from django.db import transaction
 import razorpay
 from django.conf import settings
+from promoter.models import Promoter
+from promoter.utils import apply_promoter_commission
 
 # Create your views here.
 
@@ -36,7 +38,12 @@ class CheckoutAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         shipping_address=serializer.save(user=user)
 
-
+        referral_code=request.data.get('referral_code')
+        promoter=None
+        if referral_code:
+            promoter=Promoter.objects.filter(referral_code=referral_code,application_status='approved').first()
+            if not promoter:
+                raise ValidationError('Invalid or inactive referral code')
         order=Order.objects.create(
             user=user,
             shipping_address=shipping_address,
@@ -44,6 +51,7 @@ class CheckoutAPIView(APIView):
             payment_method=request.data.get('payment_method','Cash on Delivery'),
             is_paid=False,
             paid_at=None,
+            promoter=promoter
             
         )
 
@@ -115,17 +123,21 @@ class OrderPaymentAPIView(APIView):
             raise ValidationError('Invalid payment method')
 
         # Update payment fields
-        order.is_paid = True
-        order.paid_at = timezone.now()
-        order.payment_method = method
-
-        # Optional: Automatically update status if still pending
-        if order.status == 'pending':
-            order.status = 'processing'
+        payment_method=method
+        if payment_method.lower() == 'cash on delivery':
+            order.payment_method='cash on delivery'
+            order.status='pending'
+            
+        else:
+            order.payment_method=payment_method
+            order.is_paid = True
+            order.paid_at = timezone.now()
+            order.status='processing'
+            apply_promoter_commission(order)
 
         order.save()
 
-        return Response({'message': 'Payment confirmed'}, status=status.HTTP_200_OK)
+        return Response({'message': 'Order confirmed'}, status=status.HTTP_200_OK)
 
 
 class CancelOrderAPIView(APIView):
@@ -183,6 +195,8 @@ class RazorpayOrderCreateAPIView(APIView):
             raise ValidationError("order not found")
         if order.is_paid:
             raise ValidationError('Order is already paid')
+        if order.status.lower() == 'cancelled':
+            raise ValidationError('Cannot pay for a cancelled order')
         
         client=razorpay.Client(auth=(settings.RAZORPAY_KEY_ID,settings.RAZORPAY_KEY_SECRET))
 
@@ -229,11 +243,14 @@ class RazorpayPaymentVerifyAPIView(APIView):
             order = Order.objects.get(tracking_number=razorpay_order_id, user=request.user)
         except Order.DoesNotExist:
             raise ValidationError("Order not found")
-
+        
         order.is_paid = True
         order.paid_at = timezone.now()
         order.status = 'processing'
         order.payment_method = 'Razorpay'
         order.save()
+
+        apply_promoter_commission(order)
+
 
         return Response({'message': 'Payment verified and order updated'}, status=status.HTTP_200_OK)

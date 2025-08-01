@@ -2,6 +2,7 @@ from django.db import models
 from products.models import ProductVariant
 from cart.models import CartItem
 from django.contrib.auth import get_user_model
+from promoter.models import Promoter
 # Create your models here.
 User=get_user_model()
 
@@ -29,6 +30,9 @@ class Order(models.Model):
     ]
 
     user=models.ForeignKey(User, on_delete=models.CASCADE)
+    promoter = models.ForeignKey(Promoter, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
+    commission=models.DecimalField( max_digits=5, decimal_places=2,default=0.0)
+    commission_applied=models.BooleanField(default=False)
     shipping_address=models.ForeignKey(ShippingAddress,on_delete=models.CASCADE)
     status=models.CharField(choices=STATUS_CHOICES,default='pending',max_length=20)
     total=models.DecimalField( max_digits=10, decimal_places=2,default=0.00)

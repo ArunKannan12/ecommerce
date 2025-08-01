@@ -2,7 +2,8 @@ from .models import Order,OrderItem,ShippingAddress
 from rest_framework import serializers
 from products.serializers import ProductVariantSerializer
 from products.models import ProductVariant
-
+from promoter.serializers import PromoterSerializer
+from promoter.models import Promoter
 
 class ShippingAddressSerializer(serializers.ModelSerializer):
     class Meta:
@@ -16,6 +17,8 @@ class OrderSerializer(serializers.ModelSerializer):
         queryset=ShippingAddress.objects.all(),
         write_only=True
     )
+    promoter=PromoterSerializer(read_only=True)
+    promoter_id=serializers.PrimaryKeyRelatedField(queryset=Promoter.objects.all(),write_only=True)
 
     class Meta:
         model = Order
@@ -23,7 +26,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'id','shipping_address','shipping_address_id',
             'status','total','payment_method','is_paid',
             'tracking_number','shipped_at','delivered_at','paid_at',
-            'created_at','updated_at',
+            'created_at','updated_at','promoter','promoter_id'
         ]
         read_only_fields = [
             'status','is_paid','tracking_number','shipped_at',
