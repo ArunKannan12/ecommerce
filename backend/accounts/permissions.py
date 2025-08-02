@@ -27,3 +27,10 @@ class IsAdminOrCustomer(BasePermission):
         return request.user.is_authenticated and (
             request.user.is_staff or request.user.role == 'admin' or request.user.role == 'customer'
         )
+    
+class IsAdminOrPromoter(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and (
+            request.user.is_staff or request.user.role in ['promoter', 'admin']
+        )
+

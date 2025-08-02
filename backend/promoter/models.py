@@ -1,8 +1,8 @@
 from django.db import models
 from django.contrib.auth import get_user_model
-import uuid
 import random
 import string
+from products.models import ProductVariant
 # Create your models here.
 
 User=get_user_model()
@@ -28,7 +28,7 @@ class Promoter(models.Model):
     deposit_amount=models.DecimalField( max_digits=5, decimal_places=2)
     application_status=models.CharField(choices=STATUS_CHOICES, max_length=50,default='pending')
     submitted_at=models.DateTimeField(auto_now_add=True)
-    approved_at=models.DateTimeField(auto_now_add=True)
+    approved_at=models.DateTimeField(null=True,blank=True)
 
     total_sales_count=models.PositiveIntegerField(default=0)
     total_commission_earned=models.DecimalField( max_digits=10, decimal_places=2,default=0)
@@ -37,3 +37,33 @@ class Promoter(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.application_status}"
+
+
+class PromoterCommission(models.Model):
+    promoter=models.ForeignKey(Promoter,on_delete=models.CASCADE)
+    order=models.ForeignKey('orders.Order',on_delete=models.CASCADE)
+    product=models.ForeignKey(ProductVariant,on_delete=models.CASCADE)
+    amount=models.DecimalField( max_digits=10, decimal_places=2,default=0.0)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.promoter.user.email} - {self.amount} for {self.product.product.name}"
+    
+
+class WithdrawalRequest(models.Model):
+    STATUS_CHOICES=[
+        ('pending','Pending'),
+        ('approved','Approved'),
+        ('rejected','Rejected')
+    ]
+
+    promoter=models.ForeignKey(Promoter, on_delete=models.CASCADE)
+    amount=models.DecimalField( max_digits=10, decimal_places=2,default=0.0)
+    status=models.CharField(choices=STATUS_CHOICES,default='pending', max_length=50)
+    requested_at=models.DateTimeField(auto_now_add=True)
+    reviewed_at=models.DateField(null=True,blank=True)
+    admin_note=models.TextField(blank=True,null=True)
+
+
+    def __str__(self):
+        return f"{self.promoter.user.email} - {self.amount} ({self.status})"

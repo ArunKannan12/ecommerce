@@ -1,90 +1,156 @@
-from .serializers import OrderSerializer,ShippingAddressSerializer
+from .serializers import OrderSerializer,ShippingAddressSerializer,CartCheckoutInputSerializer,ShippingAddressInputSerializer
 from rest_framework.generics import ListAPIView,RetrieveAPIView
 from accounts.permissions import IsCustomer,IsAdminOrCustomer
-from cart.models import CartItem,Cart
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
+from cart.models import Cart,CartItem
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
-from .models import Order,OrderItem
+from .models import Order,OrderItem,ShippingAddress
 from django.db import transaction
 import razorpay
 from django.conf import settings
 from promoter.models import Promoter
 from promoter.utils import apply_promoter_commission
+from django.shortcuts import get_object_or_404
+from decimal import Decimal
+from products.models import ProductVariant
+from .utils import create_order_with_items
+from datetime import timedelta
+from django.utils import timezone
 
-# Create your views here.
+class ReferralCheckoutAPIView(APIView):
+    permission_classes = [IsCustomer]
 
-
-class CheckoutAPIView(APIView):
-    permission_classes=[IsCustomer]
-    
     @transaction.atomic
-    def post(self,request):
-        user=request.user
-        cart=Cart.objects.filter(user=user).first()
+    def post(self, request):
+        user = request.user
+        data = request.data
 
-        if not cart:
-            raise ValidationError('Cart does not exist')
-        
+        # Step 1: Validate item list
+        items = data.get("items")
+        if not items or not isinstance(items, list):
+            raise ValidationError({"items": "A valid list of items is required."})
 
-        cart_items=CartItem.objects.filter(cart=cart)
+        # Step 2: Validate shipping address
+        shipping_address = None
+        if data.get("shipping_address_id"):
+            try:
+                shipping_address = ShippingAddress.objects.get(id=data["shipping_address_id"], user=user)
+            except ShippingAddress.DoesNotExist:
+                raise ValidationError({"shipping_address_id": "Invalid address for this user."})
+        else:
+            shipping_data = data.get("shipping_address")
+            if not shipping_data:
+                raise ValidationError({"shipping_address": "This field is required."})
+            shipping_serializer = ShippingAddressSerializer(data=shipping_data)
+            shipping_serializer.is_valid(raise_exception=True)
+            shipping_address = shipping_serializer.save(user=user)
 
-        if not cart_items.exists():
-            raise ValidationError('Cart is empty')
-        
-        serializer=ShippingAddressSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        shipping_address=serializer.save(user=user)
-
-        referral_code=request.data.get('referral_code')
-        promoter=None
+        # Step 3: Validate referral code if provided
+        promoter = None
+        referral_code = data.get("referral_code")
         if referral_code:
-            promoter=Promoter.objects.filter(referral_code=referral_code,application_status='approved').first()
+            promoter = Promoter.objects.filter(
+                referral_code=referral_code,
+                application_status="approved"
+            ).first()
             if not promoter:
-                raise ValidationError('Invalid or inactive referral code')
-        order=Order.objects.create(
+                raise ValidationError({"referral_code": "Invalid or inactive referral code."})
+
+        # Step 4: Validate payment method
+        payment_method = data.get("payment_method", "Cash on Delivery")
+        if payment_method not in ["Cash on Delivery", "Razorpay"]:
+            raise ValidationError({"payment_method": "Invalid payment method."})
+
+        # Step 5: Create order and optional Razorpay order
+        order, razorpay_order = create_order_with_items(
             user=user,
+            items=items,
             shipping_address=shipping_address,
-            total=0,
-            payment_method=request.data.get('payment_method','Cash on Delivery'),
-            is_paid=False,
-            paid_at=None,
+            payment_method=payment_method,
             promoter=promoter
-            
         )
 
-        total_price=0
-
-        for item in cart_items:
-            variant=item.product_variant
-
-            if item.quantity > variant.stock:
-                raise ValidationError(f"not enough stock for {variant}")
-            
-            variant.stock -=item.quantity
-            variant.save()
-
-            item_total=item.quantity * variant.product.price
-            total_price+=item_total
-
-
-            OrderItem.objects.create(
-                order=order,
-                product_variant=variant,
-                quantity=item.quantity,
-                price=variant.product.price
-            )
-
-        order.total = total_price
-        order.save()
-
-        # Clear the cart
-        cart_items.delete()
+        # Step 6: Return appropriate response
+        if razorpay_order:
+            return Response({
+                "order_id": razorpay_order.get("id"),
+                "razorpay_key": settings.RAZORPAY_KEY_ID,
+                "amount": razorpay_order.get("amount"),
+                "currency": razorpay_order.get("currency"),
+                "order": OrderSerializer(order).data
+            }, status=status.HTTP_200_OK)
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+
+class CartCheckoutAPIView(APIView):
+    permission_classes = [IsCustomer]
+
+    @transaction.atomic
+    def post(self, request):
+        user = request.user
+        cart_items = CartItem.objects.filter(cart__user=request.user)
+        if not cart_items.exists():
+            return Response({"detail":"Cart is empty"},status=status.HTTP_400_BAD_REQUEST)
         
+        
+        serializer = CartCheckoutInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # Handle shipping address
+        shipping_address = None
+        if data.get("shipping_address_id"):
+            try:
+                shipping_address = ShippingAddress.objects.get(id=data["shipping_address_id"], user=user)
+            except ShippingAddress.DoesNotExist:
+                raise ValidationError({"shipping_address_id": "Invalid address for this user."})
+        else:
+            shipping_input = data.get("shipping_address")
+            shipping_serializer = ShippingAddressSerializer(data=shipping_input)
+            shipping_serializer.is_valid(raise_exception=True)
+            shipping_address = shipping_serializer.save(user=user)
+
+        # Handle referral code
+        promoter = None
+        referral_code = data.get("referral_code")
+        if referral_code:
+            promoter = Promoter.objects.filter(
+                referral_code=referral_code,
+                application_status="approved"
+            ).first()
+            if not promoter:
+                raise ValidationError({"referral_code": "Invalid or inactive referral code."})
+
+        # Handle payment method
+        payment_method = data.get("payment_method")
+        if payment_method not in ["Cash on Delivery", "Razorpay"]:
+            raise ValidationError({"payment_method": "Invalid payment method."})
+
+        # Create the order from cart
+        order, razorpay_order = create_order_with_items(
+            user=user,
+            shipping_address=shipping_address,
+            payment_method=payment_method,
+            promoter=promoter,
+            items=cart_items
+        )
+        cart_items.delete()
+        # Prepare response
+        if razorpay_order:
+            return Response({
+                "order_id": razorpay_order.get("id"),
+                "razorpay_key": settings.RAZORPAY_KEY_ID,
+                "amount": razorpay_order.get("amount"),
+                "currency": razorpay_order.get("currency"),
+                "order": OrderSerializer(order).data
+            }, status=status.HTTP_200_OK)
+
+        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED) 
+    
 
 class OrderListAPIView(ListAPIView):
     serializer_class=OrderSerializer

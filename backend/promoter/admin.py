@@ -4,6 +4,7 @@ from .models import Promoter
 @admin.register(Promoter)
 class PromoterAdmin(admin.ModelAdmin):
     list_display = [
+        'id',
         'user', 'phone_number', 
         'referral_code',
         'bank_account_number', 'ifsc_code', 

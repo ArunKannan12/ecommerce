@@ -44,3 +44,49 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields=['id','order',
                 'order_id','product_variant',
                 'product_variant_id','quantity','price']
+        
+class ShippingAddressInputSerializer(serializers.Serializer):
+    full_name = serializers.CharField(max_length=100)
+    phone_number = serializers.CharField(max_length=20)
+    address = serializers.CharField()
+    city = serializers.CharField(max_length=50)
+    postal_code = serializers.CharField(max_length=20)
+    country = serializers.CharField(max_length=50)
+
+class CartCheckoutInputSerializer(serializers.Serializer):
+    shipping_address_id = serializers.IntegerField(required=False)
+    shipping_address = ShippingAddressInputSerializer(required=False)
+    payment_method = serializers.ChoiceField(choices=['Cash on Delivery', 'Razorpay'])
+    referral_code = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, data):
+        has_id = data.get('shipping_address_id')
+        shipping_data = data.get('shipping_address')
+
+        if not has_id and not shipping_data:
+            raise serializers.ValidationError({
+                "shipping_address": {
+                    "full_name": ["This field is required."],
+                    "phone_number": ["This field is required."],
+                    "address": ["This field is required."],
+                    "city": ["This field is required."],
+                    "postal_code": ["This field is required."],
+                    "country": ["This field is required."]
+                }
+            })
+
+        if has_id and shipping_data:
+            raise serializers.ValidationError({
+                "non_field_errors": [
+                    "Provide either 'shipping_address_id' or 'shipping_address', not both."
+                ]
+            })
+
+        # ✅ Validate nested shipping_address fields manually if provided
+        if shipping_data:
+            nested_serializer = ShippingAddressInputSerializer(data=shipping_data)
+            if not nested_serializer.is_valid():
+                raise serializers.ValidationError({"shipping_address": nested_serializer.errors})
+
+        return data
+
