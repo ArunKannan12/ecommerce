@@ -42,12 +42,12 @@ class Promoter(models.Model):
 class PromoterCommission(models.Model):
     promoter=models.ForeignKey(Promoter,on_delete=models.CASCADE)
     order=models.ForeignKey('orders.Order',on_delete=models.CASCADE)
-    product=models.ForeignKey(ProductVariant,on_delete=models.CASCADE)
+    product_variant=models.ForeignKey(ProductVariant,on_delete=models.CASCADE)
     amount=models.DecimalField( max_digits=10, decimal_places=2,default=0.0)
     created_at=models.DateTimeField(auto_now_add=True)
-
+    is_paid = models.BooleanField(default=False)
     def __str__(self):
-        return f"{self.promoter.user.email} - {self.amount} for {self.product.product.name}"
+        return f"{self.promoter.user.email} - {self.amount} for {self.product_variant.product.name}"
     
 
 class WithdrawalRequest(models.Model):
@@ -67,3 +67,4 @@ class WithdrawalRequest(models.Model):
 
     def __str__(self):
         return f"{self.promoter.user.email} - {self.amount} ({self.status})"
+    

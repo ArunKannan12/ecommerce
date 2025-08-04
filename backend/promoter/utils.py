@@ -1,21 +1,20 @@
-from promoter.models import PromoterCommission  # or wherever you defined it
+from promoter.models import PromoterCommission
 
 def apply_promoter_commission(order):
     promoter = order.promoter
+
     if not promoter or order.commission_applied or promoter.application_status.lower() != 'approved':
-        return  # Don't apply if already done or not eligible
+        return
 
     total_commission = 0
 
     for item in order.orderitem_set.all():
         variant = item.product_variant
-        product = variant.product
-        rate = product.promoter_commission_rate or 0
+        rate = variant.promoter_commission_rate or 0  # Correct source
 
         if rate > 0:
             commission_amount = item.quantity * item.price * (rate / 100)
 
-            # Store per-item commission
             PromoterCommission.objects.create(
                 promoter=promoter,
                 order=order,
@@ -37,7 +36,7 @@ def apply_promoter_commission(order):
         'is_eligible_for_withdrawal'
     ])
 
-    # Mark order as commission-applied
+    # Mark commission as applied
     order.commission_applied = True
-    order.commission = total_commission  # Optional: store total earned from this order
+    order.commission = total_commission
     order.save(update_fields=['commission_applied', 'commission'])

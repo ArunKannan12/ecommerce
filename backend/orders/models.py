@@ -69,13 +69,24 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('picked', 'Picked'),
+        ('packed', 'Packed'),
+        ('shipped', 'Shipped'),
+        ('cancelled', 'Cancelled'),
+    ]
+
     order=models.ForeignKey(Order, on_delete=models.CASCADE)
     product_variant=models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
     quantity=models.PositiveIntegerField(default=0)
     price=models.DecimalField( max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    packed_at = models.DateTimeField(null=True, blank=True)
+    shipped_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.quantity} X {self.product_variant}"
+        return f"{self.id}{self.quantity} X {self.product_variant}"
     
 
     

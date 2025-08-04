@@ -6,6 +6,7 @@ from orders.models import Order
 from promoter.models import Promoter  # safe because it's the same module
 
 class PromoterSerializer(serializers.ModelSerializer):
+    referral_link = serializers.SerializerMethodField()
     class Meta:
         model = Promoter
         fields = '__all__'

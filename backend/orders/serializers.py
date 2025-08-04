@@ -41,9 +41,10 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model=OrderItem
-        fields=['id','order',
-                'order_id','product_variant',
-                'product_variant_id','quantity','price']
+        fields = [
+            'id', 'order', 'order_id', 'product_variant', 'product_variant_id',
+            'quantity', 'price', 'status', 'packed_at', 'shipped_at'
+        ]
         
 class ShippingAddressInputSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=100)
@@ -57,8 +58,8 @@ class CartCheckoutInputSerializer(serializers.Serializer):
     shipping_address_id = serializers.IntegerField(required=False)
     shipping_address = ShippingAddressInputSerializer(required=False)
     payment_method = serializers.ChoiceField(choices=['Cash on Delivery', 'Razorpay'])
-    referral_code = serializers.CharField(required=False, allow_blank=True)
-
+    
+    
     def validate(self, data):
         has_id = data.get('shipping_address_id')
         shipping_data = data.get('shipping_address')
@@ -89,4 +90,24 @@ class CartCheckoutInputSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"shipping_address": nested_serializer.errors})
 
         return data
+    
+class CheckoutItemInputSerializer(serializers.Serializer):
+    product_variant_id = serializers.IntegerField(required=True)
+    quantity = serializers.IntegerField(required=True, min_value=1)
 
+class ReferralCheckoutInputSerializer(CartCheckoutInputSerializer):
+    items = CheckoutItemInputSerializer(many=True, required=True)
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError("This field cannot be empty.")
+        return value
+    
+    
+class OrderItemStatusUpdateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=['picked', 'packed', 'shipped'])
+
+    def validate_status(self, value):
+        if value not in ['picked', 'packed', 'shipped']:
+            raise serializers.ValidationError("Invalid status update.")
+        return value

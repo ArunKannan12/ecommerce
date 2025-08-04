@@ -22,11 +22,11 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
-    list_display = ('order', 'product_variant', 'quantity', 'price')
+    list_display = ('id','order', 'product_variant', 'quantity', 'price')
     search_fields = ('order__id', 'product_variant__product__name')
     readonly_fields = ()
 
 @admin.register(ShippingAddress)
 class ShippingAddressAdmin(admin.ModelAdmin):
-    list_display = ('user', 'full_name', 'city', 'country', 'phone_number')
+    list_display = ('id','user', 'full_name', 'city', 'country', 'phone_number')
     search_fields = ('user__email', 'full_name', 'city', 'country')

@@ -48,6 +48,9 @@ ROLE_CHOICES = [
         ('promoter', 'Promoter'),
         ('investor', 'Investor'),
         ('admin', 'Admin'),
+        ('deliveryman','Delivery Man'),
+        ('warehouse_staff','Warehouse Staff'),
+        ('investor','Investor'),
     ] 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):

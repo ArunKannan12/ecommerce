@@ -26,6 +26,7 @@ class Product(models.Model):
 class ProductVariant(models.Model):
     product=models.ForeignKey(Product, on_delete=models.CASCADE,related_name='variants')
     variant_name=models.CharField(max_length=50)
+    promoter_commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     sku=models.CharField( max_length=50,unique=True)
     additional_price=models.DecimalField( max_digits=5, decimal_places=2,default=0.00)
     stock=models.PositiveIntegerField(default=0)

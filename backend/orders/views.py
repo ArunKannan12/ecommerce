@@ -1,6 +1,9 @@
-from .serializers import OrderSerializer,ShippingAddressSerializer,CartCheckoutInputSerializer,ShippingAddressInputSerializer
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter    
+from orders.serializers import OrderItemSerializer
+from .serializers import OrderSerializer,ShippingAddressSerializer,CartCheckoutInputSerializer,ShippingAddressInputSerializer,ReferralCheckoutInputSerializer
 from rest_framework.generics import ListAPIView,RetrieveAPIView
-from accounts.permissions import IsCustomer,IsAdminOrCustomer
+from accounts.permissions import IsCustomer,IsAdminOrCustomer,IsWarehouseStaffOrAdmin
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
@@ -16,7 +19,7 @@ from promoter.utils import apply_promoter_commission
 from django.shortcuts import get_object_or_404
 from decimal import Decimal
 from products.models import ProductVariant
-from .utils import create_order_with_items
+from .utils import create_order_with_items,update_order_status_from_items
 from datetime import timedelta
 from django.utils import timezone
 
@@ -26,13 +29,14 @@ class ReferralCheckoutAPIView(APIView):
     @transaction.atomic
     def post(self, request):
         user = request.user
-        data = request.data
+        serializer = ReferralCheckoutInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
 
         # Step 1: Validate item list
         items = data.get("items")
-        if not items or not isinstance(items, list):
-            raise ValidationError({"items": "A valid list of items is required."})
-
+        payment_method = data.get("payment_method")
+        
         # Step 2: Validate shipping address
         shipping_address = None
         if data.get("shipping_address_id"):
@@ -50,7 +54,7 @@ class ReferralCheckoutAPIView(APIView):
 
         # Step 3: Validate referral code if provided
         promoter = None
-        referral_code = data.get("referral_code")
+        referral_code = request.query_params.get('ref')
         if referral_code:
             promoter = Promoter.objects.filter(
                 referral_code=referral_code,
@@ -60,7 +64,6 @@ class ReferralCheckoutAPIView(APIView):
                 raise ValidationError({"referral_code": "Invalid or inactive referral code."})
 
         # Step 4: Validate payment method
-        payment_method = data.get("payment_method", "Cash on Delivery")
         if payment_method not in ["Cash on Delivery", "Razorpay"]:
             raise ValidationError({"payment_method": "Invalid payment method."})
 
@@ -320,3 +323,77 @@ class RazorpayPaymentVerifyAPIView(APIView):
 
 
         return Response({'message': 'Payment verified and order updated'}, status=status.HTTP_200_OK)
+
+class PickOrderItemAPIView(APIView):
+    permission_classes = [IsWarehouseStaffOrAdmin]
+
+    def post(self, request, id):
+        try:
+            item = OrderItem.objects.get(id=id)
+        except OrderItem.DoesNotExist:
+            raise ValidationError("Item not found")
+
+        if item.status != 'pending':
+            return Response({'message': 'Only pending items can be picked'}, status=400)
+
+        item.status = 'picked'
+        item.save(update_fields=['status'])
+
+        update_order_status_from_items(item.order)
+
+        return Response({'message': 'Item marked as picked'}, status=200)
+    
+class PackOrderItemAPIView(APIView):
+    permission_classes = [IsWarehouseStaffOrAdmin]
+
+    def post(self, request, id):
+        try:
+            item = OrderItem.objects.get(id=id)
+        except OrderItem.DoesNotExist:
+            raise ValidationError("Item not found")
+
+        if item.status != 'picked':
+            return Response({'message': 'Only picked items can be packed'}, status=400)
+
+        item.status = 'packed'
+        item.packed_at = timezone.now()
+        item.save(update_fields=['status', 'packed_at'])
+
+        update_order_status_from_items(item.order)
+
+        return Response({'message': 'Item marked as packed'}, status=200)
+    
+
+class ShipOrderItemAPIView(APIView):
+    permission_classes = [IsWarehouseStaffOrAdmin]
+
+    def post(self, request, id):
+        try:
+            item = OrderItem.objects.get(id=id)
+        except OrderItem.DoesNotExist:
+            raise ValidationError("Item not found")
+
+        if item.status != 'packed':
+            return Response({'message': 'Only packed items can be shipped'}, status=400)
+
+        item.status = 'shipped'
+        item.shipped_at = timezone.now()
+        item.save(update_fields=['status', 'shipped_at'])
+
+        update_order_status_from_items(item.order)
+
+        return Response({'message': 'Item marked as shipped'}, status=200)
+    
+
+class OrderItemListAPIView(ListAPIView):
+    permission_classes = [IsWarehouseStaffOrAdmin]
+    serializer_class = OrderItemSerializer
+    filter_backends=[DjangoFilterBackend,SearchFilter]
+    filterset_fields=['status','order__id']
+    search_fields=['product_variant__product__name','order__id']
+    
+
+    def get_queryset(self):
+        return OrderItem.objects.filter(
+            status__in=['pending', 'picked', 'packed']
+        ).order_by('status', 'id')

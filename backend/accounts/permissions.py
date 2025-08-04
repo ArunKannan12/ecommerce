@@ -34,3 +34,13 @@ class IsAdminOrPromoter(BasePermission):
             request.user.is_staff or request.user.role in ['promoter', 'admin']
         )
 
+class IsWarehouseStaffOrAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and (
+            request.user.is_staff or getattr(request.user,'role','') in ['admin','warehouse_staff']
+        )
+class IsInvestorOrAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and (
+            request.user.is_staff or getattr(request.user,'role','') in ['admin','investor']
+        )

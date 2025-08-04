@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Promoter
+from .models import Promoter,PromoterCommission,WithdrawalRequest
 
 @admin.register(Promoter)
 class PromoterAdmin(admin.ModelAdmin):
@@ -41,3 +41,13 @@ class PromoterAdmin(admin.ModelAdmin):
             'fields': ('deposit_amount', 'total_sales_count', 'total_commission_earned', 'wallet_balance', 'is_eligible_for_withdrawal')
         }),
     )
+
+
+@admin.register(PromoterCommission)
+class PromoterCommissionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'promoter', 'order', 'amount', 'is_paid', 'created_at')
+    list_filter = ('is_paid', 'created_at')
+    search_fields = ('promoter__user__username', 'order__id')
+    ordering = ('-created_at',)
+    autocomplete_fields = ['promoter', 'order']
+    list_editable = ('is_paid',)

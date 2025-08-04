@@ -1,4 +1,5 @@
 # orders/utils.py
+from django.utils import timezone
 from .models import OrderItem,Order
 from decimal import Decimal
 from rest_framework.exceptions import ValidationError
@@ -63,3 +64,23 @@ def create_order_with_items(user, items, shipping_address, payment_method, promo
         order.save()
 
     return order, razorpay_order
+
+
+
+def update_order_status_from_items(order):
+    item_statuses = order.orderitem_set.values_list('status', flat=True)
+
+    if all(status == 'shipped' for status in item_statuses):
+        order.status = 'shipped'
+        order.shipped_at = timezone.now()
+
+    elif all(status in ['picked', 'packed'] for status in item_statuses):
+        order.status = 'processing'
+
+    elif any(status in ['picked', 'packed'] for status in item_statuses):
+        order.status = 'processing'
+
+    else:
+        order.status = 'pending'
+
+    order.save(update_fields=['status', 'shipped_at'])
