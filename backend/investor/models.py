@@ -1,15 +1,15 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import RegexValidator
-
+from django.db.models import Sum
 User = get_user_model()
 
 
 class Investor(models.Model):
     VERIFICATION_STATUS = [
-        ('PENDING', 'Pending'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected')
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected')
     ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -17,7 +17,6 @@ class Investor(models.Model):
         max_length=20,
         validators=[RegexValidator(r'^\+?\d{10,15}$')]
     )
-    net_worth = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     profile_image = models.ImageField(upload_to='investors/', null=True, blank=True)
     address = models.TextField()
     verification_status = models.CharField(max_length=10, choices=VERIFICATION_STATUS, default='pending')
@@ -30,21 +29,40 @@ class Investor(models.Model):
 
     def __str__(self):
         return self.user.email
-
+    @property
+    def total_confirmed_investments(self):
+        return self.investments.filter(confirmed=True).aggregate(total=Sum("amount"))["total"] or 0
 
 class Investment(models.Model):
     investor = models.ForeignKey(Investor, on_delete=models.CASCADE, related_name='investments')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    transaction_id = models.CharField(max_length=100, unique=True)
     invested_at = models.DateTimeField(auto_now_add=True)
     confirmed = models.BooleanField(default=False)  # Set to True once payment is verified
     note = models.TextField(null=True, blank=True)
+    
+    
 
     def __str__(self):
         return f"{self.investor.user.email} - ₹{self.amount} on {self.invested_at.date()}"
 
+class InvestmentPayment(models.Model):
+    investment = models.OneToOneField(Investment, on_delete=models.CASCADE, related_name='payment')
+    payment_gateway = models.CharField(max_length=50)  # e.g., 'razorpay'
+    transaction_id = models.CharField(max_length=100, unique=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=20, choices=[
+        ('initiated', 'Initiated'),
+        ('success', 'Success'),
+        ('failed', 'Failed')
+    ], default='initiated')
+    paid_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
-class ProductSaleShare(models.Model):  # ✅ Fixed typo here
+    def __str__(self):
+        return f"{self.investment.investor.user.email} - {self.status}"
+
+
+class ProductSaleShare(models.Model):  
     investor = models.ForeignKey(Investor, on_delete=models.CASCADE)
     total_sales_volume = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     profit_generated = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)

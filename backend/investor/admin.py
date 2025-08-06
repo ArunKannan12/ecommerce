@@ -4,7 +4,7 @@ from .models import Investor, Investment, ProductSaleShare, Payout, InvestorWall
 
 @admin.register(Investor)
 class InvestorAdmin(admin.ModelAdmin):
-    list_display = ['user', 'phone', 'verification_status', 'net_worth', 'joined_at']
+    list_display = ['id','user', 'phone', 'verification_status',  'joined_at']
     search_fields = ['user__email', 'phone']
     list_filter = ['verification_status', 'joined_at']
     readonly_fields = ['joined_at', 'updated_at']
@@ -12,8 +12,8 @@ class InvestorAdmin(admin.ModelAdmin):
 
 @admin.register(Investment)
 class InvestmentAdmin(admin.ModelAdmin):
-    list_display = ['investor', 'amount', 'transaction_id', 'invested_at', 'confirmed']
-    search_fields = ['transaction_id', 'investor__user__email']
+    list_display = ['id','investor', 'amount',  'invested_at', 'confirmed']
+    search_fields = [ 'investor__user__email']
     list_filter = ['confirmed', 'invested_at']
     readonly_fields = ['invested_at']
 
