@@ -2,6 +2,10 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import RegexValidator
 from django.db.models import Sum
+from rest_framework.exceptions import ValidationError
+from django.db.models.signals import post_save
+from products.models import ProductVariant
+from django.dispatch import receiver
 User = get_user_model()
 
 
@@ -35,15 +39,22 @@ class Investor(models.Model):
 
 class Investment(models.Model):
     investor = models.ForeignKey(Investor, on_delete=models.CASCADE, related_name='investments')
+    product_variant=models.ForeignKey(ProductVariant,on_delete=models.CASCADE,null=True,blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     invested_at = models.DateTimeField(auto_now_add=True)
     confirmed = models.BooleanField(default=False)  # Set to True once payment is verified
     note = models.TextField(null=True, blank=True)
     
+    class Meta:
+        indexes=[
+            models.Index(fields=['investor']),
+            models.Index(fields=['confirmed']),
+            models.Index(fields=['product_variant'])
+        ]
     
 
     def __str__(self):
-        return f"{self.investor.user.email} - ₹{self.amount} on {self.invested_at.date()}"
+        return f"{self.investor.user.email} - ₹{self.amount} in{self.product_variant}on {self.invested_at.date()}"
 
 class InvestmentPayment(models.Model):
     investment = models.OneToOneField(Investment, on_delete=models.CASCADE, related_name='payment')
@@ -57,6 +68,11 @@ class InvestmentPayment(models.Model):
     ], default='initiated')
     paid_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        if self.amount != self.investment.amount:
+            raise ValidationError("Payment amount must match investment amount.")
 
     def __str__(self):
         return f"{self.investment.investor.user.email} - {self.status}"
@@ -70,6 +86,14 @@ class ProductSaleShare(models.Model):
     period_start = models.DateField()
     period_end = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together=('investor','period_start','period_end')
+        indexes=[
+            models.Index(fields=['investor']),
+            models.Index(fields=['period_start','period_end'])
+        ]
 
     def __str__(self):
         return f"{self.investor.user.email} earned ₹{self.investor_share} from sales"
@@ -85,6 +109,14 @@ class Payout(models.Model):
     payout_date = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=50, choices=CHOICES, default='pending')
     sale_share = models.ForeignKey(ProductSaleShare, null=True, blank=True, on_delete=models.CASCADE)
+    updated_at=models.DateTimeField(auto_now=True)
+
+    class Meta:
+       
+        indexes=[
+            models.Index(fields=['investor']),
+            models.Index(fields=['status'])
+        ]
 
     def __str__(self):
         return f"{self.investor.user.email} - ₹{self.amount} - {self.status}"
@@ -97,3 +129,9 @@ class InvestorWallet(models.Model):
 
     def __str__(self):
         return f"{self.investor.user.email} - ₹{self.balance}"
+
+@receiver(post_save, sender=Investor)
+def create_investor_wallet(sender,instance,created,**kwargs):
+    if created and not hasattr(instance,'wallet'):
+        InvestorWallet.objects.create(investor=instance)
+    

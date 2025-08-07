@@ -1,7 +1,9 @@
 from django.shortcuts import render
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated
-from accounts.permissions import IsInvestorOrAdmin
+from rest_framework.permissions import IsAuthenticated,IsAdminUser
+from accounts.permissions import IsInvestorOrAdmin,IsAdmin
+from .utils import create_sale_shares_for_investment,generate_product_sale_shares
+from datetime import datetime
 from rest_framework.exceptions import PermissionDenied
 from .models import (Investment,
                      Investor,
@@ -50,60 +52,45 @@ class InvestorDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         user=self.request.user
         if not (user.is_staff or user.role =='admin'):
-            raise PermissionDenied('only admin can update ')
+            raise PermissionDenied('Only admins are allowed to update investor profiles.')
+
         serializer.save()
     
     def perform_destroy(self, instance):
-        user=self.request.user
-        if not (user.is_staff or user.role =='admin'):
-            raise PermissionDenied('only admin can delete ')
+        user = self.request.user
+        if not (user.is_staff or user.role == 'admin'):
+            raise PermissionDenied('Only admin can delete')
         instance.delete()
 
 
+
 class InvestmentListCreateAPIView(generics.ListCreateAPIView):
-    permission_classes=[IsInvestorOrAdmin]
-    serializer_class=InvestmentSerializer
+    permission_classes = [IsInvestorOrAdmin]
+    serializer_class = InvestmentSerializer
 
     def get_queryset(self):
-        user=self.request.user
+        user = self.request.user
         if user.is_staff and user.role == 'admin':
             return Investment.objects.all()
         return Investment.objects.filter(investor__user=user)
-    
-    class InvestmentListCreateAPIView(generics.ListCreateAPIView):
-        permission_classes = [IsInvestorOrAdmin]
-        serializer_class = InvestmentSerializer
 
-        def get_queryset(self):
-            user = self.request.user
-            if user.is_staff and user.role == 'admin':
-                return Investment.objects.all()
-            return Investment.objects.filter(investor__user=user)
+    def perform_create(self, serializer):
+        user = self.request.user
+        try:
+            investor = Investor.objects.get(user=user)
+        except Investor.DoesNotExist:
+            raise ValidationError("No investor found for this user.")
 
-        def perform_create(self, serializer):
-            user = self.request.user
-            try:
-                investor = Investor.objects.get(user=user)
-            except Investor.DoesNotExist:
-                raise ValidationError("No investor found for this user.")
+        # ✅ Prevent multiple pending investments
+        if Investment.objects.filter(investor=investor, confirmed=False).exists():
+            raise ValidationError("You already have a pending investment.")
 
-            # ✅ Prevent multiple pending investments
-            if Investment.objects.filter(investor=investor, confirmed=False).exists():
-                raise ValidationError("You already have a pending investment.")
-
-            # ✅ Force confirmed=False during creation
-            instance = serializer.save(investor=investor, confirmed=False)
-
-            # ✅ Set total_confirmed_investments only if confirmed=True (which won’t happen here)
-            instance.total_confirmed_investments = Investment.objects.filter(
-                investor=investor, confirmed=True
-            ).aggregate(total=Sum('amount'))['total'] or 0
-            instance.save()
+        serializer.save(investor=investor,confirmed=False)
 
 
 
 class InvestmentRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsInvestorOrAdmin]
+    permission_classes = [IsAuthenticated,IsInvestorOrAdmin]
     serializer_class = InvestmentSerializer
 
     def get_queryset(self):
@@ -114,23 +101,22 @@ class InvestmentRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIVi
     
     def perform_update(self, serializer):
         user = self.request.user
-        instance = serializer.instance
-        old_confirmed = instance.confirmed
+        data=self.request.data
+        amount=data.get('amount')
+        instance=serializer.instance
 
-        if 'confirmed' in self.request.data and not (user.is_staff or getattr(user, 'role', None) == 'admin'):
-            raise PermissionDenied("Only admin can change the confirmed status.")
-
-        instance = serializer.save()
-
-        # ✅ Update total_confirmed_investments if it was just confirmed
-        if not old_confirmed and instance.confirmed:
-            investor = instance.investor
-            total = Investment.objects.filter(
-                investor=investor, confirmed=True
-            ).aggregate(total=Sum('amount'))['total'] or 0
-            instance.total_confirmed_investments = total
-            instance.save()
+        if instance.confirmed and amount:
+            raise PermissionDenied('confirmed amount cannot be updated')
         
+        if 'confirmed' in data and not (user.is_staff or getattr(user, 'role', None) == 'admin'):
+            raise PermissionDenied("Only admin can change the confirmed status.")
+        
+        updated_investment=serializer.save()
+
+        if not instance.confirmed and updated_investment.confirmed:
+            create_sale_shares_for_investment(updated_investment)
+
+             
     def perform_destroy(self, instance):
         user = self.request.user
         if not user.is_staff:
@@ -160,15 +146,16 @@ class InvestmentSummaryDetailedAPIView(APIView):
                    "confirmed_investments": InvestmentSerializer(confirmed, many=True).data,
                    "pending_investments": InvestmentSerializer(pending, many=True).data
                })  
-class ProductSaleShareListCreateAPIView(generics.ListCreateAPIView):
+class ProductSaleShareListAPIView(generics.ListAPIView):
     permission_classes=[IsInvestorOrAdmin]
     serializer_class=ProductSaleShareSerializer
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff:
+        if user.is_staff or getattr(user,'role','')== 'admin':
             return ProductSaleShare.objects.all()
         return ProductSaleShare.objects.filter(investor__user=user)
+
     
 class PayoutListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsInvestorOrAdmin]
@@ -193,3 +180,28 @@ class InvestorWalletDetailAPIView(generics.RetrieveAPIView):
             investor_id=self.kwargs.get("investor_id")
             return InvestorWallet.objects.get(investor__id=investor_id)
         return InvestorWallet.objects.get(investor__user=user)
+    
+
+class GenerateProductSalesShareAPIView(APIView):
+    permission_classes=[IsAdmin]
+
+    def post(self,request):
+        start_date=request.data.get('start_date')
+        end_date=request.data.get('end_date')
+
+        if not start_date or not end_date:
+            raise ValidationError({"detail":"start date and end date are required."})
+        
+        try:
+            start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValidationError({"detail": "Invalid date format. Use YYYY-MM-DD."})
+
+        if start > end:
+            raise ValidationError({"detail": "start_date must be before end_date"})
+
+        generate_product_sale_shares(start, end)
+
+        return Response({
+            "message": f"Product sale shares generated for period {start} to {end}."})
