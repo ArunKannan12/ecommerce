@@ -1,7 +1,7 @@
 from .models import ProductSaleShare
 from datetime import date,time,datetime
 from django.db.models import Sum,F,ExpressionWrapper,DecimalField
-from .models import ProductSaleShare,Investment
+from .models import ProductSaleShare,Investment,InvestorWallet
 from orders.models import OrderItem
 from decimal import Decimal
 
@@ -70,3 +70,8 @@ def generate_product_sale_shares(start_date: date, end_date: date):
                 print("🔁 Existing share updated.")
         except Exception as e:
             print("❌ Error saving share:", e)
+
+        wallet,_=InvestorWallet.objects.get_or_create(investor=investor)
+        wallet.balance=F('balance') + investor_share
+        wallet.save()
+        wallet.refresh_from_db()

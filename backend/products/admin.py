@@ -1,41 +1,48 @@
+import nested_admin
 from django.contrib import admin
-from .models import Product, ProductImage, ProductVariant, Category
-
-# Inline for Product inside CategoryAdmin
-class ProductInline(admin.TabularInline):
-    model = Product
-    extra = 1
-
-# Inline for ProductVariant inside ProductAdmin
-class ProductVariantInline(admin.TabularInline):
-    model = ProductVariant
-    extra = 1
-
-# Inline for ProductImage inside ProductAdmin
-class ProductImageInline(admin.TabularInline):
-    model = ProductImage
-    extra = 1
+from .models import Category, Product, ProductVariant, ProductImage, ProductVariantImage
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'slug']
-    prepopulated_fields = {"slug": ("name",)}
-    inlines = [ProductInline]
+    list_display = ('name', 'slug')
+    prepopulated_fields = {'slug': ('name',)}  # auto-fill slug in admin
+    search_fields = ('name',)
+
+class ProductImageInline(nested_admin.NestedTabularInline):
+    model = ProductImage
+    extra = 1
+
+class ProductVariantImageInline(nested_admin.NestedTabularInline):
+    model = ProductVariantImage
+    extra = 1
+
+class ProductVariantInline(nested_admin.NestedTabularInline):
+    model = ProductVariant
+    extra = 1
+    inlines = [ProductVariantImageInline]  # nested variant images here
+    show_change_link = True
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'price', 'is_available', 'created_at']
-    list_filter = ['category', 'is_available']
-    search_fields = ['name', 'description']
-    prepopulated_fields = {"slug": ("name",)}
-    inlines = [ProductVariantInline, ProductImageInline]
+class ProductAdmin(nested_admin.NestedModelAdmin):
+    list_display = ('name', 'category', 'price', 'is_available', 'featured', 'created_at')
+    list_filter = ('category', 'is_available', 'featured')
+    search_fields = ('name', 'description', 'slug')
+    prepopulated_fields = {'slug': ('name',)}
+    inlines = [ProductImageInline, ProductVariantInline]
 
 @admin.register(ProductVariant)
 class ProductVariantAdmin(admin.ModelAdmin):
-    list_display = ['product', 'variant_name', 'sku', 'additional_price', 'stock', 'is_active']
-    list_filter = ['is_active']
-    search_fields = ['variant_name', 'sku']
+    list_display = ('product', 'variant_name', 'sku', 'stock', 'is_active', 'promoter_commission_rate', 'additional_price')
+    list_filter = ('is_active',)
+    search_fields = ('variant_name', 'sku', 'product__name')
+    inlines = [ProductVariantImageInline]  # optional here if you want separate variant admin page
 
 @admin.register(ProductImage)
 class ProductImageAdmin(admin.ModelAdmin):
-    list_display = ['product', 'alt_text']
+    list_display = ('product', 'image', 'alt_text')
+    search_fields = ('product__name', 'alt_text')
+
+@admin.register(ProductVariantImage)
+class ProductVariantImageAdmin(admin.ModelAdmin):
+    list_display = ('variant', 'image', 'alt_text')
+    search_fields = ('variant__variant_name', 'alt_text')

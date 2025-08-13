@@ -32,14 +32,48 @@ class InvestmentSerializer(serializers.ModelSerializer):
     
 
 class InvestmentPaymentSerializer(serializers.ModelSerializer):
-    investment=InvestmentSerializer(read_only=True)
-    
+    investment = InvestmentSerializer(read_only=True, many=True)
+    investment_id = serializers.PrimaryKeyRelatedField(
+        queryset=Investment.objects.filter(confirmed=False),
+        many=True,
+        write_only=True
+    )
+
     class Meta:
-        model=InvestmentPayment
-        fields=['id','investment',
-                'amount','invested_at','confirmed','note'
-                ]
-        read_only_fields=['id','investor','invested_at','confirmed']
+        model = InvestmentPayment
+        fields = [
+            'id', 'investment', 'investment_id',
+            'amount', 'payment_gateway', 'transaction_id',
+            'status', 'paid_at', 'created_at'
+        ]
+        read_only_fields = ['id', 'status', 'paid_at', 'created_at']
+
+    def validate(self, data):
+        investments = data.get('investment_id')
+        total = sum(inv.amount for inv in investments)
+        if data['amount'] != total:
+            raise serializers.ValidationError(
+                f"Amount must equal the total of selected investments (₹{total})."
+            )
+        return data
+
+    def create(self, validated_data):
+        investments = validated_data.pop('investment_id')
+        investor = self.context['request'].user.investor
+
+        payment = InvestmentPayment.objects.create(
+            investor=investor,
+            **validated_data
+        )
+        payment.investments.set(investments)
+
+        # Mark each related investment as confirmed
+        for inv in investments:
+            inv.confirmed = True
+            inv.save()
+
+        return payment
+
 
     
 class ProductSaleShareSerializer(serializers.ModelSerializer):

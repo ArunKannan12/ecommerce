@@ -3,6 +3,7 @@ from products.models import ProductVariant
 from cart.models import CartItem
 from django.contrib.auth import get_user_model
 from promoter.models import Promoter
+from delivery.models import DeliveryMan
 # Create your models here.
 User=get_user_model()
 
@@ -42,11 +43,11 @@ class Order(models.Model):
     shipped_at = models.DateTimeField(blank=True, null=True)
     delivered_at = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
-    paid_at=models.DateTimeField(auto_now_add=True,blank=True,null=True)
+    paid_at=models.DateTimeField(blank=True,null=True)
     created_at=models.DateTimeField(auto_now_add=True)
     cancel_reason = models.TextField(blank=True, null=True)
     razorpay_order_id = models.CharField(max_length=100, blank=True, null=True)
-
+    delivered_by=models.ForeignKey(DeliveryMan,on_delete=models.CASCADE,null=True,blank=True,related_name='orders_delivered')
 
     def __str__(self):
         return f"{self.id} ({self.user.email}--{self.status})"

@@ -15,10 +15,11 @@ class OrderSerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSerializer(read_only=True)
     shipping_address_id = serializers.PrimaryKeyRelatedField(
         queryset=ShippingAddress.objects.all(),
-        write_only=True
+        write_only=True,required=False,allow_null=True
     )
     promoter=PromoterSerializer(read_only=True)
-    promoter_id=serializers.PrimaryKeyRelatedField(queryset=Promoter.objects.all(),write_only=True)
+    promoter_id=serializers.PrimaryKeyRelatedField(queryset=Promoter.objects.all(),
+                                                   write_only=True,required=False,allow_null=True)
 
     class Meta:
         model = Order
@@ -111,3 +112,31 @@ class OrderItemStatusUpdateSerializer(serializers.Serializer):
         if value not in ['picked', 'packed', 'shipped']:
             raise serializers.ValidationError("Invalid status update.")
         return value
+
+
+
+class OrderPaymentSerializer(serializers.Serializer):
+    order_id = serializers.UUIDField(required=True)
+    payment_method = serializers.ChoiceField(choices=['Cash on Delivery', 'razorpay'])
+    razorpay_order_id = serializers.CharField(required=False, allow_blank=True)
+    razorpay_payment_id = serializers.CharField(required=False, allow_blank=True)
+    razorpay_signature = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        order_id = attrs.get('order_id')
+        payment_method = attrs.get('payment_method')
+
+        try:
+            order = Order.objects.get(id=order_id, user=self.context['request'].user)
+        except Order.DoesNotExist:
+            raise serializers.ValidationError("Order not found.")
+
+        if order.is_paid:
+            raise serializers.ValidationError("Order is already paid.")
+
+        if payment_method == 'razorpay':
+            if not (attrs.get('razorpay_order_id') and attrs.get('razorpay_payment_id') and attrs.get('razorpay_signature')):
+                raise serializers.ValidationError("Razorpay payment details are required.")
+
+        attrs['order'] = order
+        return attrs 

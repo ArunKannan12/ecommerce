@@ -57,7 +57,7 @@ class Investment(models.Model):
         return f"{self.investor.user.email} - ₹{self.amount} in{self.product_variant}on {self.invested_at.date()}"
 
 class InvestmentPayment(models.Model):
-    investment = models.OneToOneField(Investment, on_delete=models.CASCADE, related_name='payment')
+    investments = models.ManyToManyField(Investment,related_name='payments')
     payment_gateway = models.CharField(max_length=50)  # e.g., 'razorpay'
     transaction_id = models.CharField(max_length=100, unique=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -71,8 +71,9 @@ class InvestmentPayment(models.Model):
     updated_at=models.DateTimeField(auto_now=True)
 
     def clean(self):
-        if self.amount != self.investment.amount:
-            raise ValidationError("Payment amount must match investment amount.")
+        total_investment_amount = self.investments.aggregate(total=models.Sum('amount'))['total'] or 0
+        if self.amount != total_investment_amount:
+            raise ValidationError("Payment amount must match sum of selected investment amounts.")
 
     def __str__(self):
         return f"{self.investment.investor.user.email} - {self.status}"
@@ -116,6 +117,7 @@ class Payout(models.Model):
         indexes=[
             models.Index(fields=['investor']),
             models.Index(fields=['status'])
+
         ]
 
     def __str__(self):
@@ -135,3 +137,9 @@ def create_investor_wallet(sender,instance,created,**kwargs):
     if created and not hasattr(instance,'wallet'):
         InvestorWallet.objects.create(investor=instance)
     
+@receiver(post_save, sender=Payout)
+def update_wallet_on_payout(sender, instance, created, **kwargs):
+    if instance.status == 'paid':
+        wallet = instance.investor.wallet
+        wallet.balance += instance.amount
+        wallet.save()

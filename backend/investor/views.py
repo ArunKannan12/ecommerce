@@ -9,7 +9,7 @@ from .models import (Investment,
                      Investor,
                      InvestorWallet,
                      Payout,
-                     ProductSaleShare
+                     ProductSaleShare,InvestmentPayment
                      )
 from .serializers import (InvestmentSerializer,
                         InvestorSerializer,
@@ -22,6 +22,9 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Sum
+import razorpay
+from django.conf import settings
+from datetime import timezone
 
 class InvestorListCreateAPIView(generics.ListCreateAPIView):
     permission_classes=[IsAuthenticated,IsInvestorOrAdmin]
@@ -80,11 +83,6 @@ class InvestmentListCreateAPIView(generics.ListCreateAPIView):
             investor = Investor.objects.get(user=user)
         except Investor.DoesNotExist:
             raise ValidationError("No investor found for this user.")
-
-        # ✅ Prevent multiple pending investments
-        if Investment.objects.filter(investor=investor, confirmed=False).exists():
-            raise ValidationError("You already have a pending investment.")
-
         serializer.save(investor=investor,confirmed=False)
 
 
@@ -168,7 +166,20 @@ class PayoutListCreateAPIView(generics.ListCreateAPIView):
         return Payout.objects.filter(investor__user=user)
 
     def perform_create(self, serializer):
-        serializer.save(investor=Investor.objects.get(user=self.request.user))
+        user=self.request.user
+        investor=Investor.objects.get(user=user)
+        serializer.save(investor=investor)
+
+class PayoutDetailUpdateAPIView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsInvestorOrAdmin]
+    serializer_class = PayoutSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or getattr(user, 'role', '') == 'admin':
+            return Payout.objects.all()
+        return Payout.objects.filter(investor__user=user)
+
 
 class InvestorWalletDetailAPIView(generics.RetrieveAPIView):
     permission_classes=[IsInvestorOrAdmin]
@@ -176,7 +187,7 @@ class InvestorWalletDetailAPIView(generics.RetrieveAPIView):
 
     def get_object(self):
         user=self.request.user
-        if user.is_staff:
+        if user.is_staff or getattr(user,'role','')=='admin':
             investor_id=self.kwargs.get("investor_id")
             return InvestorWallet.objects.get(investor__id=investor_id)
         return InvestorWallet.objects.get(investor__user=user)
@@ -205,3 +216,105 @@ class GenerateProductSalesShareAPIView(APIView):
 
         return Response({
             "message": f"Product sale shares generated for period {start} to {end}."})
+    
+
+class RazorpayInvestmentOrderCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        investment_ids = request.data.get("investment_ids")
+
+        if not investment_ids or not isinstance(investment_ids, list):
+            raise ValidationError({"investment_ids": "This field is required and must be a list."})
+
+        investments = Investment.objects.filter(id__in=investment_ids, investor__user=request.user, confirmed=False)
+
+        if investments.count() != len(investment_ids):
+            raise ValidationError("One or more investment IDs are invalid or already confirmed.")
+
+        total_amount = sum(inv.amount for inv in investments)
+
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
+        razorpay_order = client.order.create({
+            "amount": int(total_amount * 100),  # Razorpay expects amount in paise
+            "currency": "INR",
+            "payment_capture": 1,
+            "notes": {
+                "investment_ids": ",".join(str(inv.id) for inv in investments),
+                "investor_email": request.user.email,
+            }
+        })
+
+        return Response({
+            "razorpay_order_id": razorpay_order['id'],
+            "investment_ids": investment_ids,
+            "amount": total_amount,
+            "currency": "INR"
+        })
+
+
+
+
+class RazorpayInvestmentVerifyAPIView(APIView):
+    permission_classes = [IsInvestorOrAdmin]
+
+    def post(self, request):
+        user = request.user
+        data = request.data
+
+        razorpay_order_id = data.get("razorpay_order_id")
+        razorpay_payment_id = data.get("razorpay_payment_id")
+        razorpay_signature = data.get("razorpay_signature")
+
+        if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature]):
+            raise ValidationError("Missing Razorpay verification data.")
+
+        try:
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
+            # Step 1: Verify signature
+            client.utility.verify_payment_signature({
+                'razorpay_order_id': razorpay_order_id,
+                'razorpay_payment_id': razorpay_payment_id,
+                'razorpay_signature': razorpay_signature
+            })
+
+            # Step 2: Fetch order details
+            order = client.order.fetch(razorpay_order_id)
+
+            investment_ids_str = order['notes'].get("investment_ids")
+            if not investment_ids_str:
+                raise ValidationError("No investment IDs found in Razorpay order notes.")
+
+            investment_ids = investment_ids_str.split(",")
+
+            # Step 3: Find all investments (ensure they belong to the current user)
+            investments = Investment.objects.filter(id__in=investment_ids, investor__user=user)
+
+            if investments.count() != len(investment_ids):
+                raise ValidationError("One or more investments not found or do not belong to you.")
+
+            # Step 4: Save payment and confirm each investment
+            for investment in investments:
+                if investment.confirmed:
+                    continue
+
+                InvestmentPayment.objects.create(
+                    investment=investment,
+                    payment_gateway="razorpay",
+                    transaction_id=razorpay_payment_id,
+                    amount=investment.amount,
+                    status="success",
+                    paid_at=timezone.now()
+                )
+
+                investment.confirmed = True
+                investment.save()
+
+            return Response({"detail": "Investments confirmed successfully."})
+
+        except razorpay.errors.SignatureVerificationError:
+            return Response({"detail": "Invalid Razorpay signature."}, status=400)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=400)

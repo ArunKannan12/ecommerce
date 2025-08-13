@@ -1,31 +1,31 @@
 # users/permissions.py
 
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission,SAFE_METHODS
 
 class IsCustomer(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role == 'customer'
+        return request.user.is_authenticated and getattr(request.user, 'role', '') == 'customer'
 
 
 class IsPromoter(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role == 'promoter'
+        return request.user.is_authenticated and getattr(request.user, 'role', '') == 'promoter'
 
 
 class IsInvestor(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role == 'investor'
+        return request.user.is_authenticated and getattr(request.user, 'role', '') == 'investor'
 
 
 class IsAdmin(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and (
-            request.user.role == 'admin' or request.user.is_superuser
+            getattr(request.user, 'role', '') == 'admin' or request.user.is_superuser
         )
 class IsAdminOrCustomer(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and (
-            request.user.is_staff or request.user.role == 'admin' or request.user.role == 'customer'
+            request.user.is_staff or getattr(request.user, 'role', '') == 'admin' or getattr(request.user, 'role', '') == 'customer'
         )
     
 class IsAdminOrPromoter(BasePermission):
@@ -44,3 +44,9 @@ class IsInvestorOrAdmin(BasePermission):
         return request.user.is_authenticated and (
             request.user.is_staff or getattr(request.user,'role','') in ['admin','investor']
         )
+
+class IsAdminOrReadOnly(BasePermission):
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            return True
+        return IsAdmin().has_permission(request,view)

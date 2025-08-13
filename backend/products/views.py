@@ -1,13 +1,26 @@
 from rest_framework import generics,permissions,filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Product,ProductVariant,ProductImage
+from .models import Product,ProductVariant,ProductImage,Category,ProductVariantImage
 from .serializers import (
-                        ProductSerializer,
-                        ProductImageSerializer,ProductVariantSerializer
+                        ProductSerializer,CategorySerializer,
+                        ProductImageSerializer,ProductVariantSerializer,
+                        ProductVariantImageSerializer
                         )
-from accounts.permissions import IsAdmin
-class ProductListCreateApiView(generics.ListCreateAPIView):
+from accounts.permissions import IsAdmin,IsAdminOrReadOnly
+from rest_framework.exceptions import ValidationError
 
+class CategoryListCreateAPIView(generics.ListCreateAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAdminOrReadOnly]  # Only admin can create
+
+class CategoryRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAdminOrReadOnly]  # Only admin can update/delete
+
+class ProductListCreateApiView(generics.ListCreateAPIView):
+    permission_classes=[permissions.AllowAny]
     serializer_class=ProductSerializer
 
     filter_backends=[
@@ -16,7 +29,7 @@ class ProductListCreateApiView(generics.ListCreateAPIView):
         filters.OrderingFilter
     ]
 
-    filterset_fields = ['category', 'is_available']
+    filterset_fields = ['featured', 'is_available']
     search_fields = ['name', 'description', 'slug']
     ordering_fields = ['created_at', 'price', 'name']
 
@@ -26,20 +39,30 @@ class ProductListCreateApiView(generics.ListCreateAPIView):
         return [permissions.AllowAny()]
 
     def get_queryset(self):
-        return Product.objects.all().order_by('-created_at')
+        qs=Product.objects.select_related('category').order_by('-created_at')
+        if not self.request.user.is_authenticated or not self.request.user.is_staff:
+            qs=qs.filter(is_available=True)
+        category_slug = self.request.query_params.get('category_slug')
+        if category_slug:
+            qs = qs.filter(category__slug=category_slug)
+        # possibly also filter for available products if needed
+        return qs
     
 
 class ProductRetrieveUpdateDestroyApiView(generics.RetrieveUpdateDestroyAPIView):
    
     serializer_class=ProductSerializer
-    lookup_field='id'
+    lookup_field='slug'
     def get_permissions(self):
         if self.request.method in ['PUT','PATCH','DELETE']:
             return [IsAdmin()]
         return [permissions.AllowAny()]
     
     def get_queryset(self):
-        return Product.objects.all()
+        qs = Product.objects.select_related('category')
+        if not self.request.user.is_authenticated or not self.request.user.is_staff:
+            qs = qs.filter(is_available=True)
+        return qs
     
 class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = ProductVariantSerializer
@@ -58,17 +81,18 @@ class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         product_id = self.kwargs.get('product_id')
-        return ProductVariant.objects.filter(product_id=product_id)
+        return ProductVariant.objects.filter(product_id=product_id).select_related('product')
 
     def perform_create(self, serializer):
         product_id = self.kwargs.get('product_id')
         serializer.save(product_id=product_id)
 
 
+
 class ProductVariantRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductVariantSerializer
     lookup_field = 'id'
-    queryset = ProductVariant.objects.all()
+    queryset = ProductVariant.objects.select_related('product')
 
     def get_permissions(self):
         if self.request.method in ['PUT', 'PATCH', 'DELETE']:
@@ -90,19 +114,59 @@ class ProductImageListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         product_id = self.kwargs.get('product_id')
-        return ProductImage.objects.filter(product_id=product_id)
+        return ProductImage.objects.filter(product_id=product_id).select_related('product')
 
     def perform_create(self, serializer):
         product_id = self.kwargs.get('product_id')
         serializer.save(product_id=product_id)
 
 
+
 class ProductImageRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductImageSerializer
     lookup_field = 'id'
-    queryset = ProductImage.objects.all()
+    queryset = ProductImage.objects.select_related('product')
 
     def get_permissions(self):
         if self.request.method in ['PUT', 'PATCH', 'DELETE']:
             return [IsAdmin()]
         return [permissions.AllowAny()]
+    
+class FeaturedProducts(generics.ListAPIView):
+    permission_classes=[permissions.AllowAny]
+    serializer_class=ProductSerializer
+
+    def get_queryset(self):
+        return Product.objects.filter(featured=True,is_available=True).order_by('-created_at')
+    
+
+class RelatedProductsAPIView(generics.ListAPIView):
+    serializer_class=ProductSerializer
+    permission_classes=[permissions.AllowAny]
+
+    def get_queryset(self):
+        slug=self.kwargs.get('slug')
+        try:
+            product=Product.objects.get(slug=slug)
+        except Product.DoesNotExist:
+            raise ValidationError("Product not found")
+        return Product.objects.filter(category=product.category,is_available=True).exclude(id=product.id).order_by("created_at")[:6]
+    
+class ProductVariantImageListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class=ProductVariantImageSerializer
+    permission_classes=[IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        variant_id=self.kwargs.get('variant_id')
+        return ProductVariantImage.objects.filter(variant_id=variant_id)
+    def perform_create(self, serializer):
+        variant_id=self.kwargs.get('variant_id')
+        serializer.save(variant_id=variant_id)
+
+class ProductVariantImageRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class=ProductVariantImageSerializer
+    permission_classes=[IsAdminOrReadOnly]
+    lookup_field='id'
+
+    def get_queryset(self):
+        return ProductVariantImage.objects.all()

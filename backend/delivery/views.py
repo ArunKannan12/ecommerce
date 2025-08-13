@@ -14,6 +14,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.generics import ListCreateAPIView,RetrieveUpdateDestroyAPIView,ListAPIView
 from rest_framework.exceptions import PermissionDenied
 from orders.serializers import OrderSerializer
+from delivery.models import DeliveryMan
+
 class MarkCODOrderDeliveredAndPaidAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDeliveryManOrAdmin]
 
@@ -37,6 +39,8 @@ class MarkCODOrderDeliveredAndPaidAPIView(APIView):
         order.is_paid = True
         order.paid_at = timezone.now()
         order.status = 'delivered'
+        deliveryman=DeliveryMan.objects.get(user=request.user)
+        order.delivered_by=deliveryman
         order.save()
 
         # Apply promoter commission if applicable
