@@ -13,24 +13,24 @@ class Cart(models.Model):
 
     @property
     def total_price(self):
-        return sum(item.quantity * item.product_variant.price for item in self.cartitem_set.all())
-
+        return sum(item.subtotal for item in self.cartitem_set.all())
+    
     def __str__(self):
         return self.user.email
     
 
 class CartItem(models.Model):
-    cart=models.ForeignKey(Cart,on_delete=models.CASCADE)
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE)
     product_variant = models.ForeignKey(ProductVariant, on_delete=models.SET_NULL, null=True)
-    quantity=models.IntegerField(default=1)
-    added_at=models.DateTimeField( auto_now_add=True)
+    quantity = models.IntegerField(default=1)
+    added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ('cart', 'product_variant')
 
     @property
     def price(self):
-        return self.product_variant.price
+        return self.product_variant.final_price if self.product_variant else 0
 
     @property
     def subtotal(self):

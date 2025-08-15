@@ -1,8 +1,8 @@
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter    
-from orders.serializers import OrderItemSerializer
+from orders.serializers import OrderItemSerializer,OrderSummarySerializer,OrderDetailSerializer,OrderSerializer
 from .serializers import OrderSerializer,ShippingAddressSerializer,CartCheckoutInputSerializer,ShippingAddressInputSerializer,ReferralCheckoutInputSerializer
-from rest_framework.generics import ListAPIView,RetrieveAPIView
+from rest_framework.generics import ListAPIView,RetrieveAPIView,ListCreateAPIView,RetrieveUpdateDestroyAPIView
 from accounts.permissions import IsCustomer,IsAdminOrCustomer,IsWarehouseStaffOrAdmin
 from rest_framework.response import Response
 from rest_framework import status
@@ -22,6 +22,7 @@ from products.models import ProductVariant
 from .utils import create_order_with_items,update_order_status_from_items
 from datetime import timedelta
 from django.utils import timezone
+from delivery.permissions import IsDeliveryManOrAdmin
 
 class ReferralCheckoutAPIView(APIView):
     permission_classes = [IsCustomer]
@@ -141,7 +142,8 @@ class CartCheckoutAPIView(APIView):
             promoter=promoter,
             items=cart_items
         )
-        cart_items.delete()
+        if payment_method == "Cash on Delivery":
+            cart_items.delete()
         # Prepare response
         if razorpay_order:
             return Response({
@@ -156,7 +158,7 @@ class CartCheckoutAPIView(APIView):
     
 
 class OrderListAPIView(ListAPIView):
-    serializer_class=OrderSerializer
+    serializer_class=OrderSummarySerializer
     permission_classes=[IsCustomer]
 
     def get_queryset(self):
@@ -164,13 +166,17 @@ class OrderListAPIView(ListAPIView):
     
 
 class OrderDetailAPIView(RetrieveAPIView):
-    serializer_class=OrderSerializer
+    serializer_class=OrderDetailSerializer
     permission_classes=[IsCustomer]
     lookup_field='id'
 
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user)
+        return (
+            Order.objects.filter(user=self.request.user)
+            .select_related("shipping_address", "promoter")
+            .prefetch_related("orderitem_set__product_variant")
+        )
     
 class OrderPaymentAPIView(APIView):
     permission_classes = [IsCustomer]
@@ -279,10 +285,11 @@ class RazorpayOrderCreateAPIView(APIView):
         order.save()
 
         return Response({
-            'order_id':razorpay_order.get('id'),
+            'razorpay_order_id':razorpay_order.get('id'),
             'razorpay_key':settings.RAZORPAY_KEY_ID,
             'amount':razorpay_order.get('amount'),
             'currency':razorpay_order.get('currency'),
+            'order':OrderSerializer(order).data
         },status=status.HTTP_200_OK)
     
 class RazorpayPaymentVerifyAPIView(APIView):
@@ -292,8 +299,9 @@ class RazorpayPaymentVerifyAPIView(APIView):
         razorpay_order_id = request.data.get('razorpay_order_id')
         razorpay_payment_id = request.data.get('razorpay_payment_id')
         razorpay_signature = request.data.get('razorpay_signature')
+        order_id = request.data.get('order_id')
 
-        if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature]):
+        if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature,order_id]):
             raise ValidationError("Missing Razorpay payment details")
 
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
@@ -309,7 +317,7 @@ class RazorpayPaymentVerifyAPIView(APIView):
 
         # Mark order as paid
         try:
-            order = Order.objects.get(tracking_number=razorpay_order_id, user=request.user)
+            order = Order.objects.get(id=order_id, user=request.user)
         except Order.DoesNotExist:
             raise ValidationError("Order not found")
         
@@ -320,6 +328,8 @@ class RazorpayPaymentVerifyAPIView(APIView):
         order.save()
 
         apply_promoter_commission(order)
+
+        CartItem.objects.filter(cart__user=request.user).delete()
 
 
         return Response({'message': 'Payment verified and order updated'}, status=status.HTTP_200_OK)
@@ -397,3 +407,75 @@ class OrderItemListAPIView(ListAPIView):
         return OrderItem.objects.filter(
             status__in=['pending', 'picked', 'packed']
         ).order_by('status', 'id')
+    
+class OrderSummaryListAPIView(ListAPIView):
+    serializer_class = OrderSummarySerializer
+    permission_classes = [IsWarehouseStaffOrAdmin | IsDeliveryManOrAdmin]  # or delivery-man role
+
+    def get_queryset(self):
+        queryset = Order.objects.all().order_by('-created_at')
+
+        # Optional: filter out cancelled or completed orders if not needed
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        return queryset
+
+class ShippingAddressListCreateView(ListCreateAPIView):
+    serializer_class = ShippingAddressSerializer
+    permission_classes = [IsCustomer]
+
+    def get_queryset(self):
+        # Only return addresses belonging to the authenticated user
+        return ShippingAddress.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        # Automatically assign the user from the request
+        serializer.save(user=self.request.user)
+
+class ShippingAddressRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
+    serializer_class = ShippingAddressSerializer
+    permission_classes = [IsCustomer]
+    lookup_field='id'
+
+    def get_queryset(self):
+        # Only allow access to the user's own addresses
+        return ShippingAddress.objects.filter(user=self.request.user)
+
+
+
+class BuyNowAPIView(APIView):
+    permission_classes = [IsCustomer]  # or your IsCustomer permission
+
+    def post(self, request):
+        user = request.user
+        items = request.data.get("items")  # list of {product_variant_id, quantity}
+        shipping_address_id = request.data.get("shipping_address")
+        payment_method = request.data.get("payment_method")
+
+        if not items:
+            return Response({"detail": "No items provided."}, status=status.HTTP_400_BAD_REQUEST)
+        if not shipping_address_id:
+            return Response({"detail": "Shipping address is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not payment_method:
+            return Response({"detail": "Payment method is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        shipping_address = get_object_or_404(ShippingAddress, id=shipping_address_id, user=user)
+
+        try:
+            order, razorpay_order = create_order_with_items(
+                user=user,
+                items=items,
+                shipping_address=shipping_address,
+                payment_method=payment_method
+            )
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = OrderSerializer(order)
+        data = serializer.data
+        if razorpay_order:
+            data["razorpay_order"] = razorpay_order
+
+        return Response(data, status=status.HTTP_201_CREATED)

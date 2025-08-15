@@ -32,7 +32,7 @@ from django.utils.decorators import method_decorator
 
 User = get_user_model()
 
-secure = not settings.DEBUG
+secure=settings.DEBUG is False
 
 
 class ResendActivationEmailView(generics.GenericAPIView):
@@ -463,7 +463,7 @@ class CookieTokenRefreshView(TokenRefreshView):
                 key='access_token',
                 value=new_access_token,
                 httponly=True,
-                secure=True,  # False for development
+                secure=False,  # False for development
                 samesite='Lax',
                 max_age=60 * 60
             )
@@ -471,7 +471,7 @@ class CookieTokenRefreshView(TokenRefreshView):
                 key='refresh_token',
                 value=new_refresh_token,
                 httponly=True,
-                secure=True,
+                secure=False,
                 samesite='Lax',
                 max_age=7 * 24 * 60 * 60
             )
@@ -511,7 +511,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 key='access_token',
                 value=access,
                 httponly=True,
-                secure=True,  # Use False during local dev
+                secure=False,  # Use False during local dev
                 samesite='Lax',
                 max_age=60 * 60  # 1 hour
             )
@@ -519,7 +519,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 key='refresh_token',
                 value=refresh,
                 httponly=True,
-                secure=True,
+                secure=False,
                 samesite='Lax',
                 max_age=7 * 24 * 60 * 60  # 7 days
             )

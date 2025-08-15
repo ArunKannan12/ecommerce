@@ -1,108 +1,103 @@
-import React, { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import axiosInstance from '../../api/axiosinstance';
 import { toast } from 'react-toastify';
 import ProductDetailShimmer from '../../shimmer/ProductDetailShimmer';
-import { useAddToCartMutation } from '../../contexts/cartSlice';
+import { useAddToCartMutation, useGetCartQuery } from '../../contexts/cartSlice';
+import { useAuth } from '../../contexts/AuthContext';  // ✅ Use AuthContext
 
 const ProductDetail = () => {
-    const {productSlug} = useParams();
-    const [product,setProduct] = useState(null)
-    const [loading,setLoading] = useState(false)
-    const navigate = useNavigate();
-    const [quantity,setQuantity] = useState(1)
-    const [relatedProducts,setRelatedProducts] = useState([])
-    const [selectedVariant,setSelectedVariant] = useState(null)
+  const { productSlug } = useParams();
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const [quantity, setQuantity] = useState(1);
+  const [relatedProducts, setRelatedProducts] = useState([]);
+  const [selectedVariant, setSelectedVariant] = useState(null);
 
-    const [addToCartMutation, { isLoading }] = useAddToCartMutation();
+  const { isAuthenticated } = useAuth();  // ✅ Use context-based auth
+  const [addToCartMutation, { isLoading }] = useAddToCartMutation();
+  const { refetch: refetchCart } = useGetCartQuery(undefined, {
+    skip: !isAuthenticated,  // ✅ Only fetch if authenticated
+  });
 
-    
-    useEffect(()=>{
-      const fetchProduct = async()=>{
-        setLoading(true)
-        try {
-          const res = await axiosInstance.get(`products/${productSlug}/`);
-          const data = res.data
-          setProduct(data)
-          if (data.variants?.length) {
-            setSelectedVariant(data.variants[0]);
-            setQuantity(1)
-          }
-
-          const relatedRes = await axiosInstance.get(`products/${productSlug}/related/`);
-          const relatedData = relatedRes.data.results
-          setRelatedProducts(relatedData);
-          } catch (error) {
-            console.error("failed to load produt",error);
-            toast.error("Product not found")
-            navigate("/store")
-          }finally{
-            setLoading(false)
-          }
-        }
-        fetchProduct()
-    },[productSlug,navigate])
-
-    const productQuantity = (task) => {
-        // If no variants at all, allow quantity change without variant check
-        if (product?.variants?.length === 0) {
-          setQuantity(q => {
-            if (task === 'add') {
-              return q + 1;  // no stock limit in this simple case, or you can add product-level stock if available
-            } else if (task === 'sub') {
-              return q > 1 ? q - 1 : 1;
-            }
-            return q;
-          });
-          return;
+  useEffect(() => {
+    const fetchProduct = async () => {
+      setLoading(true);
+      try {
+        const res = await axiosInstance.get(`products/${productSlug}/`);
+        const data = res.data;
+        setProduct(data);
+        if (data.variants?.length) {
+          setSelectedVariant(data.variants[0]);
+          setQuantity(1);
         }
 
-        // If variants exist, variant must be selected
-        if (!selectedVariant) {
-          toast.error("No variant selected");
-          return;
+        const relatedRes = await axiosInstance.get(`products/${productSlug}/related/`);
+        const relatedData = relatedRes.data.results;
+        setRelatedProducts(relatedData);
+      } catch (error) {
+        console.error("Failed to load product", error);
+        toast.error("Product not found");
+        navigate("/store");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProduct();
+  }, [productSlug, navigate]);
+
+  const productQuantity = (task) => {
+    if (product?.variants?.length === 0) {
+      setQuantity(q => task === 'add' ? q + 1 : q > 1 ? q - 1 : 1);
+      return;
+    }
+
+    if (!selectedVariant) {
+      toast.error("No variant selected");
+      return;
+    }
+
+    const stock = selectedVariant.stock;
+
+    setQuantity(q => {
+      if (task === 'add') {
+        if (q >= stock) {
+          toast.error("Reached maximum stock");
+          return q;
         }
+        return q + 1;
+      } else if (task === 'sub') {
+        return q > 1 ? q - 1 : 1;
+      }
+      return q;
+    });
+  };
 
-        const stock = selectedVariant.stock;
+  const addToLocalCart = (productVariantId, productId, quantity) => {
+    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+    const key = productVariantId ?? productId;
+    const existingIndex = cart.findIndex(item => item.key === key);
 
-        if (task === 'add') {
-          setQuantity(q => {
-            if (q >= stock) {
-              toast.error("Reached maximum stock");
-              return q;
-            }
-            return q + 1;
-          });
-        } else if (task === 'sub') {
-          setQuantity(q => (q > 1 ? q - 1 : 1));
-        }
-};
+    if (existingIndex > -1) {
+      cart[existingIndex].quantity += quantity;
+    } else {
+      cart.push({ key, product_variant_id: productVariantId, product_id: productId, quantity });
+    }
 
-const addToLocalCart = (productVariantId, productId, quantity) => {
-  let cart = JSON.parse(localStorage.getItem("cart")) || [];
+    localStorage.setItem("cart", JSON.stringify(cart));
+  };
 
-  // Key: variant if exists else product
-  const key = productVariantId ?? productId;
-
-  const existingIndex = cart.findIndex(item => item.key === key);
-
-  if (existingIndex > -1) {
-    cart[existingIndex].quantity += quantity;
-  } else {
-    cart.push({ key, product_variant_id: productVariantId, product_id: productId, quantity });
-  }
-
-  localStorage.setItem("cart", JSON.stringify(cart));
-};
-
-const addToCart = async (productVariantId) => {
-    const isAuthenticated = Boolean(localStorage.getItem("access_token")); // check auth
+  const addToCart = async (productVariantId) => {
+    if (!productVariantId) {
+      toast.error("No variant selected");
+      return;
+    }
 
     if (!isAuthenticated) {
-      // Guest: update localStorage + dispatch event
       let cart = JSON.parse(localStorage.getItem("cart")) || [];
       const key = productVariantId ?? product?.id;
-      const existingIndex = cart.findIndex((item) => item.key === key);
+      const existingIndex = cart.findIndex(item => item.key === key);
 
       if (existingIndex > -1) {
         cart[existingIndex].quantity += quantity;
@@ -116,29 +111,25 @@ const addToCart = async (productVariantId) => {
       }
 
       localStorage.setItem("cart", JSON.stringify(cart));
-      window.dispatchEvent(new Event("cartUpdated")); // Notify Navbar
+      window.dispatchEvent(new Event("cartUpdated"));
       toast.success("Added to cart locally.");
       return;
     }
 
-    // Authenticated: send to backend
     try {
-      const payload =
-        product?.variants?.length > 0
-          ? { product_variant_id: productVariantId, quantity }
-          : { product_id: product?.id, quantity };
+      const payload = { product_variant: productVariantId, quantity };
 
-      await addToCartMutation(payload).unwrap(); // mutation from RTK
+      await addToCartMutation(payload).unwrap();
       toast.success("Added to cart");
 
-      // Refetch cart to update Navbar immediately
-      refetchCart?.(); 
+      refetchCart();  // ✅ Refresh cart state
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to add to cart");
+      console.error("Add to cart error:", error);
+      const variantError = error?.data?.product_variant?.[0];
+      toast.error(variantError || error?.data?.detail || "Failed to add to cart");
     }
   };
-  
+
 
 
 
@@ -244,10 +235,28 @@ const addToCart = async (productVariantId) => {
                 </button>
                 <button
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                  // You can add buy now logic here later
+                  onClick={() => {
+                    if (!selectedVariant) {
+                      toast.error("Select a variant first");
+                      return;
+                    }
+
+                    const buyNowItems = [
+                        {
+                          product_variant_id: selectedVariant.id, // backend expects product_variant_id
+                          quantity: quantity,
+                          price: Number(selectedVariant.additional_price || 0) + Number(product.price), // total price of this variant
+                          product_variant_detail: selectedVariant, // optional, helps in Checkout for display
+                        }
+                      ];
+
+                    navigate("/checkout", { state: { buyNowItems } });
+                  }}
+                  disabled={!selectedVariant || selectedVariant.stock === 0} // ✅ prevent OOS
                 >
                   Buy Now
                 </button>
+
               </div>
             </div>
           </div>

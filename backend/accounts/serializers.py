@@ -21,7 +21,7 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'first_name', 'last_name', 'password',
             'custom_user_profile', 'social_auth_pro_pic',
             'phone_number', 'address', 'pincode',
-            'district', 'city', 'state','auth_provider'
+            'district', 'city', 'state','auth_provider','role'
         ]
         read_only_fields = ['id', 'email', 'social_auth_pro_pic'] 
     

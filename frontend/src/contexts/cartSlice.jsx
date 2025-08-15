@@ -19,21 +19,22 @@ const axiosBaseQuery =
 
 export const cartSlice = createApi({
   reducerPath: "cartSlice",
-  baseQuery: axiosBaseQuery({ baseUrl: "/api/" }),
+  baseQuery: axiosBaseQuery({ baseUrl: "" }),
   tagTypes: ["Cart"],
   endpoints: (builder) => ({
     getCart: builder.query({
       query: () => ({ url: "cart/", method: "GET" }),
+      transformResponse:(response)=>response.results,
       providesTags: ["Cart"],
     }),
     addToCart: builder.mutation({
-      query: ({ product_variant_id, quantity }) => ({
-        url: "cart/",
-        method: "POST",
-        data: { product_variant_id, quantity },
+        query: ({ product_variant, quantity }) => ({
+          url: "cart/",
+          method: "POST",
+          data: { product_variant, quantity },  // ✅ Correct field name
+        }),
+        invalidatesTags: ["Cart"],
       }),
-      invalidatesTags: ["Cart"],
-    }),
     updateCartItem: builder.mutation({
       query: ({ id, quantity }) => ({
         url: `cart/${id}/`,
@@ -49,6 +50,14 @@ export const cartSlice = createApi({
       }),
       invalidatesTags: ["Cart"],
     }),
+    mergeGuestCart:builder.mutation({
+      query:(items)=>({
+        url:"cart/merge/",
+        method:"POST",
+        data:{items},
+      }),
+      invalidatesTags:['Cart']
+    }),
   }),
 });
 
@@ -57,4 +66,5 @@ export const {
   useAddToCartMutation,
   useUpdateCartItemMutation,
   useRemoveCartItemMutation,
+  useMergeGuestCartMutation,
 } = cartSlice;

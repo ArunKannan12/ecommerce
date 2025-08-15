@@ -12,7 +12,7 @@ const Navbar = () => {
   const location = useLocation();
   const debounceTimeout = useRef(null);
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated,logout } = useAuth();
 
   // Authenticated cart
   const { data: cartData } = useGetCartQuery(undefined, { skip: !isAuthenticated });
@@ -117,7 +117,17 @@ const Navbar = () => {
                 </span>
               )}
             </Link>
-            <Link to="/about">About</Link>
+            {isAuthenticated && (
+              <Link to="/orders">Orders</Link> // <-- Added Orders link
+            )}
+           {!isAuthenticated ? (
+              <Link to="/login">Login</Link>
+            ) : (
+              <button onClick={logout} className="text-red-600 hover:underline">
+                Logout
+              </button>
+              
+            )}
           </div>
 
           {/* Mobile toggle */}
@@ -129,20 +139,24 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden bg-black/80 px-4 pb-4 space-y-4">
-          <Link to="/" onClick={() => setIsOpen(false)}>Home</Link>
-          <Link to="/store" onClick={() => setIsOpen(false)}>Products</Link>
-          <Link to="/cart" onClick={() => setIsOpen(false)}>
-            Cart
-            {totalItems > 0 && (
-              <span className="ml-2 inline-block bg-red-600 text-white rounded-full px-2 text-xs font-semibold">
-                {totalItems}
-              </span>
+          <div className="md:hidden bg-black/80 px-4 pb-4 space-y-4">
+            <Link to="/" onClick={() => setIsOpen(false)}>Home</Link>
+            <Link to="/store" onClick={() => setIsOpen(false)}>Products</Link>
+            <Link to="/cart" onClick={() => setIsOpen(false)}>
+              Cart
+              {totalItems > 0 && (
+                <span className="ml-2 inline-block bg-red-600 text-white rounded-full px-2 text-xs font-semibold">
+                  {totalItems}
+                </span>
+              )}
+            </Link>
+            {isAuthenticated && (
+              <Link to="/orders" onClick={() => setIsOpen(false)}>Orders</Link> // <-- Added Orders link
             )}
-          </Link>
-          <Link to="/about" onClick={() => setIsOpen(false)}>About</Link>
-        </div>
-      )}
+            {!isAuthenticated && <Link to="/login" onClick={() => setIsOpen(false)}>Login</Link>}
+          </div>
+        )}
+
     </nav>
   );
 };

@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from rest_framework.throttling import UserRateThrottle
 
-from .serializers import CartItemSerializer, CartSummarySerializer
+from .serializers import CartItemSerializer, CartSummarySerializer,CartItemInputSerializer
 from .models import CartItem, Cart
 from accounts.permissions import IsCustomer
 from products.models import ProductVariant
@@ -86,32 +86,81 @@ class CartMergeAPIView(APIView):
     throttle_classes = [UserRateThrottle]
 
     @transaction.atomic
-
     def post(self, request):
-        items = request.data.get('items', [])
+        print(f"[CartMerge] User: {request.user}")
+
+        items = request.data.get("items", [])
+        if not isinstance(items, list):
+            print(f"[CartMerge] Invalid payload: Expected a list, got {type(items).__name__}")
+            return Response({"error": "Expected a list of items"}, status=status.HTTP_400_BAD_REQUEST)
+
         cart, _ = Cart.objects.get_or_create(user=request.user)
+        print(f"[CartMerge] Cart ID: {cart.id}")
 
-        for item in items:
-            variant_id = item.get('product_variant_id')
-            quantity = item.get('quantity', 1)
+        merged_items = []
+        skipped_items = []
+        failed_items = []
 
-            if not variant_id:
+        for idx, item in enumerate(items):
+            print(f"[CartMerge] Processing item {idx + 1}: {item}")
+
+            serializer = CartItemInputSerializer(data=item)
+            if not serializer.is_valid():
+                print(f"[CartMerge] Skipped: Invalid item data - {serializer.errors}")
+                skipped_items.append({
+                    "item": item,
+                    "errors": serializer.errors
+                })
                 continue
 
-            variant = get_object_or_404(ProductVariant, id=variant_id)
-            cart_item, created = CartItem.objects.get_or_create(
-                cart=cart,
-                product_variant=variant,
-                defaults={'quantity': quantity}
-            )
-            if not created:
-                new_quantity = cart_item.quantity + quantity
-                check_stock(variant, new_quantity)
-                cart_item.quantity = new_quantity
-                cart_item.save()
+            validated_data = serializer.validated_data
+            variant_id = validated_data['product_variant_id']
+            quantity = validated_data['quantity']
 
-        return Response({"detail": "Cart merged successfully"}, status=status.HTTP_200_OK)
+            try:
+                variant = ProductVariant.objects.get(id=variant_id)
+                print(f"[CartMerge] Found variant: {variant.id} - {variant.variant_name}")
+            except ProductVariant.DoesNotExist:
+                print(f"[CartMerge] Failed: Variant {variant_id} not found")
+                failed_items.append(variant_id)
+                continue
 
+            try:
+                cart_item, created = CartItem.objects.get_or_create(
+                    cart=cart,
+                    product_variant=variant,
+                    defaults={'quantity': quantity}
+                )
+                if created:
+                    print(f"[CartMerge] Created new cart item")
+                    check_stock(variant, quantity)
+                else:
+                    new_quantity = cart_item.quantity + quantity
+                    print(f"[CartMerge] Updated cart item: {cart_item.quantity} → {new_quantity}")
+                    check_stock(variant, new_quantity)
+                    cart_item.quantity = new_quantity
+                    cart_item.save()
+
+                merged_items.append({
+                    "variant_id": variant_id,
+                    "quantity": cart_item.quantity
+                })
+
+            except Exception as e:
+                print(f"[CartMerge] Failed to merge item {variant_id}: {str(e)}")
+                failed_items.append({
+                    "variant_id": variant_id,
+                    "error": str(e)
+                })
+
+        print(f"[CartMerge] Merge complete. Merged: {len(merged_items)}, Skipped: {len(skipped_items)}, Failed: {len(failed_items)}")
+
+        return Response({
+            "detail": "Cart merged successfully",
+            "merged_items": merged_items,
+            "skipped_items": skipped_items,
+            "failed_items": failed_items
+        }, status=status.HTTP_200_OK)
 
 class ProductVariantBulkAPIView(APIView):
     permission_classes = [AllowAny]

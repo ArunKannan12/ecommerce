@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'react-toastify'
 import axiosInstance from '../../api/axiosinstance';
+import { syncGuestcart } from '../../utils/syncGuestCart';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 
 const LoginAndSignup = () => {
@@ -14,7 +16,8 @@ const LoginAndSignup = () => {
     password:'',
     re_password:''
   })
-
+  const navigate = useNavigate();
+  const location = useLocation();
   const {first_name,last_name,email,password,re_password} = formData
 
   const handleChange = (e)=>{
@@ -24,7 +27,7 @@ const LoginAndSignup = () => {
   const handleLoginSubmit = async (e)=>{
       e.preventDefault();
 
-      if (!email | !password) {
+      if (!email || !password) {
         toast.error("Please enter your email and password")
         return
       }
@@ -32,10 +35,10 @@ const LoginAndSignup = () => {
       const success = await login({
         email:email,
         password:password
-      })
+      },navigate,location)
       if(success){
         toast.success("Logged in successfully")
-
+        
       }else{
         toast.error("login failed")
       }
@@ -60,9 +63,12 @@ const LoginAndSignup = () => {
               password: formData.password,
           });
 
-          if (res.status === 200) {
+          if (res.status === 201) {
             toast.success("Signup successful! Please check your email for activation.");
+            const success = await login({ email, password }, navigate, location);
+           
             setIsLogin(true);
+            toast.success("Account created and logged in!");
           }
         } catch (error) {
           const data = error.response?.data;

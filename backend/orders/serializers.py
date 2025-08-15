@@ -7,10 +7,12 @@ from promoter.models import Promoter
 
 class ShippingAddressSerializer(serializers.ModelSerializer):
     class Meta:
-        model=ShippingAddress
-        fields=['id','user','full_name','phone_number','address','city','postal_code','country']   
-        read_only_fields=['user']
+        model = ShippingAddress
+        fields = ['id', 'user', 'full_name', 'phone_number', 'address', 'city', 'postal_code', 'country']
+        read_only_fields = ['user']
 
+    
+    
 class OrderSerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSerializer(read_only=True)
     shipping_address_id = serializers.PrimaryKeyRelatedField(
@@ -54,6 +56,12 @@ class ShippingAddressInputSerializer(serializers.Serializer):
     city = serializers.CharField(max_length=50)
     postal_code = serializers.CharField(max_length=20)
     country = serializers.CharField(max_length=50)
+
+class ShippingAddressSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShippingAddress
+        fields = ["full_name", "phone_number", "address", "city", "postal_code", "country"]
+
 
 class CartCheckoutInputSerializer(serializers.Serializer):
     shipping_address_id = serializers.IntegerField(required=False)
@@ -140,3 +148,41 @@ class OrderPaymentSerializer(serializers.Serializer):
 
         attrs['order'] = order
         return attrs 
+    
+class OrderItemSimpleSerializer(serializers.ModelSerializer):
+    product_variant = ProductVariantSerializer(read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'product_variant', 'quantity', 'price', 'status']
+
+class OrderDetailSerializer(serializers.ModelSerializer):
+    shipping_address = ShippingAddressSerializer(read_only=True)
+    promoter = PromoterSerializer(read_only=True)
+    items = OrderItemSimpleSerializer(source='orderitem_set', many=True, read_only=True)
+
+
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'shipping_address', 'status', 'total', 'payment_method', 'is_paid',
+            'tracking_number', 'shipped_at', 'delivered_at', 'paid_at',
+            'created_at', 'updated_at', 'promoter', 'items'
+        ]
+        
+class OrderSummarySerializer(serializers.ModelSerializer):
+    shipping_address = ShippingAddressSummarySerializer(read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "shipping_address",
+            "status",
+            "total",
+            "payment_method",
+            "is_paid",
+            "tracking_number",
+            "created_at",
+            "updated_at"
+        ]

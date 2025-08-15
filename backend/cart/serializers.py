@@ -16,7 +16,7 @@ class CartSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 class CartItemSerializer(serializers.ModelSerializer):
-    product_variant_detail=ProductVariantSerializer(read_only=True)
+    product_variant_detail = ProductVariantSerializer(source='product_variant', read_only=True)
     product_variant=serializers.PrimaryKeyRelatedField(queryset=ProductVariant.objects.all(),write_only=True)
     price = serializers.SerializerMethodField()
     subtotal = serializers.SerializerMethodField()
@@ -38,18 +38,22 @@ class CartItemSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Quantity must be greater than zero.")
         return value
     def get_price(self, obj):
-        """Returns unit price from the variant."""
-        return obj.product_variant.price
+        variant = getattr(obj, 'product_variant', None)
+        return variant.final_price if variant else 0
 
     def get_subtotal(self, obj):
-        """Returns quantity × price."""
-        return obj.quantity * obj.product_variant.price
+        variant = getattr(obj, 'product_variant', None)
+        return obj.quantity * variant.final_price if variant else 0
     
 class CartSummarySerializer(serializers.ModelSerializer):
     items = CartItemSerializer(source='cartitem_set', many=True, read_only=True)
-    total_quantity = serializers.IntegerField(source='total_quantity', read_only=True)
-    total_price = serializers.DecimalField(source='total_price', max_digits=10, decimal_places=2, read_only=True)
+    total_quantity = serializers.IntegerField(read_only=True)
+    total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Cart
         fields = ['id', 'created_at', 'items', 'total_quantity', 'total_price']
+
+class CartItemInputSerializer(serializers.Serializer):
+    product_variant_id = serializers.IntegerField()
+    quantity=serializers.IntegerField(min_value=1)
