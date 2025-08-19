@@ -1,177 +1,355 @@
-import React, { useState } from 'react'
-import { useAuth } from '../../contexts/AuthContext'
-import { toast } from 'react-toastify'
-import axiosInstance from '../../api/axiosinstance';
-import { syncGuestcart } from '../../utils/syncGuestCart';
+import React, { useState, useEffect, useRef } from 'react';
+import { toast } from 'react-toastify';
 import { useNavigate, useLocation } from 'react-router-dom';
-
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import GoogleAuth from './GoogleAuth';
+import FacebookAuth from './FacebookAuth';
+import { useAuth } from '../../contexts/AuthContext';
+import axiosInstance from '../../api/axiosinstance';
 
 const LoginAndSignup = () => {
-  const {login} = useAuth();
-  const [isLogin,setIsLogin] = useState(true)
-  const [formData,setFormData] = useState({
-    first_name:'',
-    last_name:'',
-    email:'',
-    password:'',
-    re_password:''
-  })
   const navigate = useNavigate();
   const location = useLocation();
-  const {first_name,last_name,email,password,re_password} = formData
+  const { login, isAuthenticated } = useAuth();
 
-  const handleChange = (e)=>{
-    setFormData((prev)=>({...prev,[e.target.name]: e.target.value}))
-  }
+  // Toggle between login/signup
+  const [isLogin, setIsLogin] = useState(true);
 
-  const handleLoginSubmit = async (e)=>{
-      e.preventDefault();
+  /*** COMMON STATES ***/
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const inputFocus = useRef(null);
 
-      if (!email || !password) {
-        toast.error("Please enter your email and password")
-        return
-      }
+  /*** LOGIN STATES ***/
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
+  const [loginErrors, setLoginErrors] = useState({});
+  const [rememberMe, setRememberMe] = useState(false);
 
-      const success = await login({
-        email:email,
-        password:password
-      },navigate,location)
-      if(success){
-        toast.success("Logged in successfully")
-        
-      }else{
-        toast.error("login failed")
-      }
-  }
+  /*** SIGNUP STATES ***/
+  const [signupData, setSignupData] = useState({
+    email: '',
+    first_name: '',
+    last_name: '',
+    password: '',
+    re_password: '',
+  });
+  const [signupErrors, setSignupErrors] = useState({});
 
-  const handleSignupSubmit = async(e)=>{
-        e.preventDefault();
-        if (!first_name || !last_name || !email || !password || !re_password) {
-          toast.error("Please fill all fields")
-          return 
-        }
-        if (password !== re_password) {
-          toast.error("Password does not match")
-          return
-        }
+  /*** EFFECTS ***/
+  useEffect(() => {
+    inputFocus.current?.focus();
+    if (isAuthenticated) {
+      const from = location.state?.from || '/';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, location.state]);
 
-         try {
-          const res = await axiosInstance.post("auth/users/", {
-              first_name: formData.first_name,
-              last_name: formData.last_name,
-              email: formData.email,
-              password: formData.password,
-          });
+  /*** COMMON FUNCTIONS ***/
+  const togglePassword = () => setShowPassword(prev => !prev);
 
-          if (res.status === 201) {
-            toast.success("Signup successful! Please check your email for activation.");
-            const success = await login({ email, password }, navigate, location);
-           
-            setIsLogin(true);
-            toast.success("Account created and logged in!");
-          }
-        } catch (error) {
-          const data = error.response?.data;
-          if (data) {
-            // Example: data might be { email: ["A user with that email already exists."] }
-            const messages = Object.values(data).flat().join(" ");
-            toast.error("Signup failed: " + messages);
-          } else {
-            toast.error("Signup failed. Please try again later.");
-          }
-          }
+  /*** LOGIN FUNCTIONS ***/
+  const handleLoginChange = (e) => {
+    setLoginData({ ...loginData, [e.target.name]: e.target.value });
+    setLoginErrors(prev => ({ ...prev, [e.target.name]: '' }));
   };
+
+  const validateLogin = () => {
+    const errors = {};
+    if (!loginData.email.trim()) errors.email = 'Email is required';
+    if (!loginData.password.trim()) errors.password = 'Password is required';
+    return errors;
+  };
+
+  const handleLoginSubmit = async (e) => {
+  e.preventDefault();
+
+  const errors = validateLogin();
+  if (Object.keys(errors).length > 0) {
+    setLoginErrors(errors);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    const redirectFrom = location.state?.from || "/"; // ← preserve the intended page
+    const res = await login(loginData, null, redirectFrom); 
+    if (res.success) {
+      toast.success("Login successful");
+      navigate(res.from, { replace: true }); // ← redirect to checkout or intended page
+    }
+  } catch (err) {
+    toast.error("Invalid email or password!");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  /*** SIGNUP FUNCTIONS ***/
+  const handleSignupChange = (e) => {
+    setSignupData({ ...signupData, [e.target.name]: e.target.value });
+    setSignupErrors(prev => ({ ...prev, [e.target.name]: '' }));
+  };
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+  const validateSignup = () => {
+    const errors = {};
+    const { email, first_name, last_name, password, re_password } = signupData;
+
+    if (!email.trim()) errors.email = 'Email is required';
+    else if (!emailRegex.test(email)) errors.email = 'Invalid email format';
+
+    if (!first_name.trim()) errors.first_name = 'First name is required';
+    if (!last_name.trim()) errors.last_name = 'Last name is required';
+
+    if (!password.trim()) errors.password = 'Password is required';
+    else if (!passwordRegex.test(password))
+      errors.password = 'Password must be at least 8 characters, include uppercase, lowercase, number, and special character.';
+
+    if (!re_password.trim()) errors.re_password = 'Confirm password is required';
+    else if (password !== re_password) errors.re_password = 'Passwords do not match';
+
+    return errors;
+  };
+
+  const handleSignupSubmit = async (e) => {
+    e.preventDefault();
+    const errors = validateSignup();
+    if (Object.keys(errors).length > 0) {
+      setSignupErrors(errors);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await axiosInstance.post('auth/users/', signupData);
+      if (res.status === 201) {
+        toast.success('Registration successful! Please check your email to verify.');
+        setSignupErrors({});
+        setTimeout(() => {
+          const from = location.state?.from || '/';
+          navigate('/verify-email', { state: { email: signupData.email, from } });
+        }, 200);
+      }
+    } catch (err) {
+      if (err.response?.data) {
+        const apiErrors = {};
+        for (const key in err.response.data) {
+          apiErrors[key] = Array.isArray(err.response.data[key])
+            ? err.response.data[key][0]
+            : err.response.data[key];
+        }
+        setSignupErrors(apiErrors);
+      } else {
+        setSignupErrors({ api: 'Registration failed. Please try again later.' });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded shadow">
-      <h1 className="text-3xl font-bold mb-6">{isLogin ? "Login" : "Signup"}</h1>
+    <div className="min-h-screen flex justify-center bg-gray-100 px-4 py-12">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8">
+        <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">
+          {isLogin ? 'Login' : 'Sign Up'}
+        </h2>
 
-      {isLogin ? (
-        <form onSubmit={handleLoginSubmit} className="space-y-4">
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={email}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            value={password}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-          >
-            Login
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={handleSignupSubmit} className="space-y-4">
-          <input
-            type="text"
-            name="first_name"
-            placeholder="First Name"
-            value={first_name}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
-          <input
-            type="text"
-            name="last_name"
-            placeholder="Last Name"
-            value={last_name}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={email}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            value={password}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
-          <input
-            type="password"
-            name="re_password"
-            placeholder="Confirm Password"
-            value={re_password}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
-          <button
-            type="submit"
-            className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700"
-          >
-            Signup
-          </button>
-        </form>
-      )}
+        {isLogin ? (
+          <form onSubmit={handleLoginSubmit} noValidate className="space-y-4">
+            <div>
+              <label className="block text-gray-700 mb-1">Email</label>
+              <input
+                ref={inputFocus}
+                type="email"
+                name="email"
+                value={loginData.email}
+                onChange={handleLoginChange}
+                placeholder="Enter your email"
+                className={`w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  loginErrors.email ? 'border-red-500' : ''
+                }`}
+              />
+              {loginErrors.email && <p className="text-red-500 text-sm mt-1">{loginErrors.email}</p>}
+            </div>
 
-      <p className="mt-4 text-center text-gray-600">
-        {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-        <button
-          className="text-blue-600 hover:underline"
-          onClick={() => setIsLogin(!isLogin)}
-        >
-          {isLogin ? "Signup" : "Login"}
-        </button>
-      </p>
+            <div className="relative">
+              <label className="block text-gray-700 mb-1">Password</label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                name="password"
+                value={loginData.password}
+                onChange={handleLoginChange}
+                placeholder="Enter your password"
+                className={`w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  loginErrors.password ? 'border-red-500' : ''
+                }`}
+              />
+              {loginErrors.password && (
+                <p className="text-red-500 text-sm mt-1">{loginErrors.password}</p>
+              )}
+              <span
+                onClick={togglePassword}
+                className="absolute top-3.5 right-3 text-gray-500 cursor-pointer"
+              >
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={() => setRememberMe(!rememberMe)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="rememberMe" className="ml-2 text-gray-700">
+                  Remember Me
+                </label>
+              </div>
+              <div>
+                <a href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                  Forgot Password?
+                </a>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold"
+            >
+              {loading ? 'Logging in...' : 'Login'}
+            </button>
+
+            <div className="flex items-center my-4">
+              <hr className="flex-grow border-gray-300" />
+              <span className="px-2 text-gray-400">or</span>
+              <hr className="flex-grow border-gray-300" />
+            </div>
+
+            <div className="flex flex-col space-y-2">
+              <GoogleAuth />
+              <FacebookAuth />
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleSignupSubmit} noValidate className="space-y-4">
+            {signupErrors.api && (
+              <div className="text-red-500 text-sm text-center">{signupErrors.api}</div>
+            )}
+
+            <div>
+              <label className="block text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                name="email"
+                value={signupData.email}
+                onChange={handleSignupChange}
+                placeholder="Enter your email"
+                className={`w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  signupErrors.email ? 'border-red-500' : ''
+                }`}
+              />
+              {signupErrors.email && <p className="text-red-500 text-sm mt-1">{signupErrors.email}</p>}
+            </div>
+
+            <div>
+              <label className="block text-gray-700 mb-1">First Name</label>
+              <input
+                type="text"
+                name="first_name"
+                value={signupData.first_name}
+                onChange={handleSignupChange}
+                placeholder="John"
+                className={`w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  signupErrors.first_name ? 'border-red-500' : ''
+                }`}
+              />
+              {signupErrors.first_name && (
+                <p className="text-red-500 text-sm mt-1">{signupErrors.first_name}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-gray-700 mb-1">Last Name</label>
+              <input
+                type="text"
+                name="last_name"
+                value={signupData.last_name}
+                onChange={handleSignupChange}
+                placeholder="Doe"
+                className={`w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  signupErrors.last_name ? 'border-red-500' : ''
+                }`}
+              />
+              {signupErrors.last_name && (
+                <p className="text-red-500 text-sm mt-1">{signupErrors.last_name}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-gray-700 mb-1">Password</label>
+              <input
+                type="password"
+                name="password"
+                value={signupData.password}
+                onChange={handleSignupChange}
+                placeholder="********"
+                className={`w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  signupErrors.password ? 'border-red-500' : ''
+                }`}
+              />
+              {signupErrors.password && (
+                <p className="text-red-500 text-sm mt-1">{signupErrors.password}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-gray-700 mb-1">Confirm Password</label>
+              <input
+                type="password"
+                name="re_password"
+                value={signupData.re_password}
+                onChange={handleSignupChange}
+                placeholder="********"
+                className={`w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  signupErrors.re_password ? 'border-red-500' : ''
+                }`}
+              />
+              {signupErrors.re_password && (
+                <p className="text-red-500 text-sm mt-1">{signupErrors.re_password}</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition font-semibold"
+            >
+              {loading ? 'Registering...' : 'Register'}
+            </button>
+          </form>
+        )}
+
+        <div className="text-center mt-4">
+          <p className="text-gray-600">
+            {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
+            <span
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-blue-600 hover:underline cursor-pointer"
+            >
+              {isLogin ? 'Sign Up' : 'Login'}
+            </span>
+          </p>
+        </div>
+      </div>
     </div>
-  )
-}
+  );
+};
 
-export default LoginAndSignup
+export default LoginAndSignup;

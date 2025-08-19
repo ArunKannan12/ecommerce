@@ -36,7 +36,7 @@ const Store = () => {
 
       const res = await axiosInstance.get("products/", { params });
       setProducts(res.data.results || res.data);
-      console.log('products', res.data.results);
+      
     } catch (error) {
       console.error("Error fetching products:", error);
       toast.error("Failed to load products!");
@@ -163,55 +163,56 @@ const Store = () => {
             {/* Products grid */}
             <section>
               {loadingProducts ? (
-                <FeaturedShimmer />
-              ) : products.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-                  {products.map((product, i) => (
-                    <div
-                      key={product.id}
-                      style={{
-                        animation: "fadeSlideUp 0.5s ease forwards",
-                        animationDelay: `${i * 100}ms`,
-                        opacity: 0,
-                        transform: "translateY(20px)",
-                      }}
-                      className="max-w-sm bg-white rounded-2xl shadow-md overflow-hidden flex flex-col
-                                 transform transition-transform duration-300
-                                 hover:shadow-xl hover:scale-105 cursor-pointer"
-                    >
-                      <Link to={`/products/${product.slug}`} className="block group">
-                      <div className="h-40 overflow-hidden">
-                        <img
-                          src={
-                            product.images && product.images.length > 0
-                              ? `http://localhost:8000${product.images[0].image}`
-                              : "/placeholder.png"
-                          }
-                          alt={product.name}
-                          className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
-                        />
-                      </div>
+  <FeaturedShimmer />
+) : products.length > 0 ? (
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+    {products.map((product, i) => (
+      <div
+        key={product.id}
+        style={{
+          animation: "fadeSlideUp 0.5s ease forwards",
+          animationDelay: `${i * 100}ms`,
+          opacity: 0,
+          transform: "translateY(20px)",
+        }}
+        className="max-w-sm bg-white rounded-2xl shadow-md overflow-hidden flex flex-col
+                   transform transition-transform duration-300
+                   hover:shadow-xl hover:scale-105 cursor-pointer"
+      >
+        <Link to={`/products/${product.slug}`} className="block group">
+          <div className="h-40 overflow-hidden">
+            <img
+              src={
+                product.images?.length > 0
+                  ? product.images[0].url  // ✅ use .url instead of .image
+                  : "/placeholder.png"     // ✅ fallback
+              }
+              alt={product.images?.[0]?.alt_text || product.name}
+              className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
+            />
+          </div>
 
-                      <div className="p-5 flex flex-col flex-grow">
-                        <h3
-                          className="text-lg font-semibold text-gray-900 truncate"
-                          title={product.name}
-                        >
-                          {product.name}
-                        </h3>
-                        <p className="mt-2 text-indigo-600 text-xl">
-                          ₹{product.price}
-                        </p>
-                      </div>
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-gray-500 text-xl mt-20">
-                  No products available.
-                </p>
-              )}
+          <div className="p-5 flex flex-col flex-grow">
+            <h3
+              className="text-lg font-semibold text-gray-900 truncate"
+              title={product.name}
+            >
+              {product.name}
+            </h3>
+            <p className="mt-2 text-indigo-600 text-xl">
+              ₹{product.price}
+            </p>
+          </div>
+        </Link>
+      </div>
+    ))}
+  </div>
+) : (
+  <p className="text-center text-gray-500 text-xl mt-20">
+    No products available.
+  </p>
+)}
+
             </section>
           </div>
         </div>

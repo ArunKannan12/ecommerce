@@ -10,8 +10,7 @@ const Category = ({ onSelectCategory, selectedCategorySlug }) => {
   const fetchCategories = async () => {
     try {
       const response = await axiosInstance.get("categories/");
-      console.log('categories',response.data.results);
-      
+            
       setCategories(response.data.results || response.data);
     } catch (error) {
       console.error("Error fetching categories:", error);
@@ -34,7 +33,9 @@ const Category = ({ onSelectCategory, selectedCategorySlug }) => {
     <p className="text-center text-gray-500 text-lg mt-8">No categories found.</p>
   ) : (
     <div className="grid grid-cols-2 sm:grid-cols-36 md:grid-cols-1 gap-6">
-      {categories.map(category => (
+      {
+      
+      categories.map(category => (
         <div
           key={category.id}
           onClick={() => onSelectCategory && onSelectCategory(category.slug)}

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import BannerSlider from "./BannerSlide";
 import axiosInstance from "../../api/axiosinstance";
 import FeaturedShimmer from "../../shimmer/FeaturedShimmer.jsx";
+import { Link } from "react-router-dom";
 
 const Home = () => {
   const [featured, setFeatured] = useState([]);
@@ -58,36 +59,40 @@ const Home = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {featured.map((prod) => (
-                <div
+                <Link
                   key={prod.id}
-                  className="rounded overflow-hidden bg-white border border-gray-200 transform transition duration-300 hover:shadow-xl hover:scale-105"
+                  to={`/products/${prod.slug}`}
+                  className="transform transition duration-300 hover:shadow-xl hover:scale-105 cursor-pointer rounded overflow-hidden"
                 >
-                  <img
-                    className="w-full h-40 sm:h-48 object-cover"
-                    src={
-                      prod.image
-                        ? prod.image
-                        : "https://cdn.pixabay.com/photo/2023/01/28/19/01/bird-7751561_1280.jpg"
-                    }
-                    alt={prod.name}
-                  />
-                  <div className="px-4 sm:px-6 py-3 sm:py-4">
-                    <h2 className="font-bold text-lg sm:text-xl mb-1 sm:mb-2">
-                      {prod.name}
-                    </h2>
-                    <p className="text-gray-700 text-sm sm:text-base">
-                      {prod.description?.slice(0, 80)}...
-                    </p>
+                  <div className="bg-white border border-gray-200">
+                    <img
+                      className="w-full h-48 object-cover"
+                      src={
+                        prod.images && prod.images.length > 0
+                          ? prod.images[0].url
+                          : "https://cdn.pixabay.com/photo/2023/01/28/19/01/bird-7751561_1280.jpg"
+                      }
+                      alt={prod.name}
+                    />
+                    <div className="px-4 sm:px-6 py-3 sm:py-4">
+                      <h2 className="font-bold text-lg sm:text-xl mb-1 sm:mb-2">
+                        {prod.name}
+                      </h2>
+                      <p className="text-gray-700 text-sm sm:text-base">
+                        {prod.description?.slice(0, 80)}...
+                      </p>
+                    </div>
+                    <div className="px-4 sm:px-6 pt-3 pb-2">
+                      <span className="inline-block bg-gray-200 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold text-gray-700 mr-2">
+                        ₹{prod.price}
+                      </span>
+                    </div>
                   </div>
-                  <div className="px-4 sm:px-6 pt-3 pb-2">
-                    <span className="inline-block bg-gray-200 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold text-gray-700 mr-2">
-                      ₹{prod.price}
-                    </span>
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
+
         </section>
       </div>
     </>

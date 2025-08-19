@@ -51,10 +51,10 @@ export const cartSlice = createApi({
       invalidatesTags: ["Cart"],
     }),
     mergeGuestCart:builder.mutation({
-      query:(items)=>({
+      query:(payload)=>({
         url:"cart/merge/",
         method:"POST",
-        data:{items},
+        data:payload
       }),
       invalidatesTags:['Cart']
     }),

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../api/axiosinstance";
 import { useMergeGuestCartMutation } from "./cartSlice";
+import { syncGuestcart } from "../utils/syncGuestCart";
 
 export const AuthContext = createContext({
   user: null,
@@ -20,11 +21,13 @@ export const AuthProvider = ({ children }) => {
 
   const [mergeGuestCart] = useMergeGuestCartMutation();
 
-  // Fetch logged-in user on mount
+  // ✅ Fetch logged-in user
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const res = await axiosInstance.get("auth/users/me/");
+      const res = await axiosInstance.get("auth/users/me/", {
+        withCredentials: true, // 👈 important for cookies
+      });
       setUser(res.data);
       setIsAuthenticated(true);
     } catch (error) {
@@ -34,46 +37,67 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
-  
+
   useEffect(() => {
     fetchProfile();
   }, []);
 
-  // Login function
-  const login = async (credentials, navigate, location) => {
-    setLoading(true);
-    try {
-      // Authenticate user
-      await axiosInstance.post("auth/jwt/create/", credentials);
-      await fetchProfile()
-
-      // Merge guest cart if any
-      const guestCart = JSON.parse(localStorage.getItem("cart")) || [];
-      if (guestCart.length) {
-        await mergeGuestCart({ items: guestCart }).unwrap();
-        localStorage.removeItem("cart");
-      }
-
-      // Redirect
-      const redirectTo = location?.state?.from || "/cart";
-      navigate(redirectTo);
-
-      return true;
-    } catch (error) {
-      console.error("Login failed:", error);
-      setUser(null);
-      setIsAuthenticated(false);
-      return false;
-    } finally {
-      setLoading(false);
+  // ✅ Login (email/password or OAuth)
+const login = async (credentials = null, tokenData = null, redirectFrom = "/") => {
+  setLoading(true);
+  try {
+    // 1️⃣ Create JWT if credentials provided
+    if (credentials) {
+      await axiosInstance.post("auth/jwt/create/", credentials, {
+        withCredentials: true,
+      });
     }
-  };
 
-  // Logout function
+    // 2️⃣ Fetch user profile
+    await fetchProfile();
+
+    // 3️⃣ Merge guest Buy Now item (if any)
+    const buyNowMinimal = JSON.parse(sessionStorage.getItem("buyNowMinimal") || "null");
+    if (buyNowMinimal) {
+      // Ensure payload is an array
+      const itemsToMerge = Array.isArray(buyNowMinimal) ? buyNowMinimal : [buyNowMinimal];
+      console.log("[CartMerge] Merging guest Buy Now item:", itemsToMerge);
+      await syncGuestcart(mergeGuestCart, itemsToMerge);
+      
+    }
+
+    // 4️⃣ Merge guest cart items (if any)
+    const guestCart = JSON.parse(localStorage.getItem("cart") || "[]");
+    if (guestCart.length > 0) {
+      console.log("[CartMerge] Merging guest cart items:", guestCart);
+      await syncGuestcart(mergeGuestCart, guestCart);
+     
+    }
+
+    // 5️⃣ Mark as authenticated
+    setIsAuthenticated(true);
+
+    // 6️⃣ Return success + redirect info
+    return { success: true, from: redirectFrom };
+  } catch (err) {
+    console.error("Login failed", err);
+    setUser(null);
+    setIsAuthenticated(false);
+    return { success: false, error: err };
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+
+
+  // ✅ Logout
   const logout = async () => {
     setLoading(true);
     try {
-      await axiosInstance.post("auth/jwt/logout/");
+      await axiosInstance.post("auth/jwt/logout/", {}, { withCredentials: true });
     } catch (error) {
       console.warn("Logout error", error);
     } finally {
@@ -89,7 +113,8 @@ export const AuthProvider = ({ children }) => {
     return user.role === role;
   };
 
-  const isAdmin = () => hasRole("admin") || user?.is_staff || user?.is_superuser;
+  const isAdmin = () =>
+    hasRole("admin") || user?.is_staff || user?.is_superuser;
 
   return (
     <AuthContext.Provider

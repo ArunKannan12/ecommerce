@@ -463,7 +463,7 @@ class CookieTokenRefreshView(TokenRefreshView):
                 key='access_token',
                 value=new_access_token,
                 httponly=True,
-                secure=False,  # False for development
+                secure=secure,  # False for development
                 samesite='Lax',
                 max_age=60 * 60
             )
@@ -471,7 +471,7 @@ class CookieTokenRefreshView(TokenRefreshView):
                 key='refresh_token',
                 value=new_refresh_token,
                 httponly=True,
-                secure=False,
+                secure=secure,
                 samesite='Lax',
                 max_age=7 * 24 * 60 * 60
             )
@@ -494,6 +494,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             user = CustomUser.objects.get(email=request.data.get('email'))
             if not user.is_verified:
                 return Response({'error':'user in not verified'},status=status.HTTP_403_FORBIDDEN)
+            remember_me=request.data.get('remember_me',False)
             res = Response({
                 'message': 'Login successful'
                 ,'access': access,
@@ -515,15 +516,24 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 samesite='Lax',
                 max_age=60 * 60  # 1 hour
             )
-            res.set_cookie(
-                key='refresh_token',
-                value=refresh,
-                httponly=True,
-                secure=False,
-                samesite='Lax',
-                max_age=7 * 24 * 60 * 60  # 7 days
-            )
+            if remember_me:
 
+                res.set_cookie(
+                    key='refresh_token',
+                    value=refresh,
+                    httponly=True,
+                    secure=False,
+                    samesite='Lax',
+                    max_age=7 * 24 * 60 * 60  # 7 days
+                )
+            else:
+                res.set_cookie(
+                    key='refresh_token',
+                    value=refresh,
+                    httponly=True,
+                    secure=False,
+                    samesite='Lax'
+                )
             return res
 
         # Return original response if login fails (e.g. 401)

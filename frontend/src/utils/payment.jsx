@@ -18,32 +18,32 @@ export const handleRazorpayPayment = async ({
   items,
   shipping_address,
   payment_method = "Razorpay",
-  onSuccess, // make sure onSuccess is passed
+  isBuyNowFlow = false,
+  onSuccess,
 }) => {
   try {
     await loadRazorpayScript();
 
-    // Create new order if no existing orderId
     if (!orderId) {
       if (!items || !shipping_address) {
         throw new Error("Items and shipping address are required for new orders");
       }
-      const orderRes = await axiosInstance.post("checkout/cart/", {
+
+      const endpoint = isBuyNowFlow ? "checkout/buy-now/" : "checkout/cart/";
+      const orderRes = await axiosInstance.post(endpoint, {
         items,
         shipping_address,
         payment_method,
       });
-      orderId = orderRes.data.order?.id;
-      console.log(orderId, 'order id');
+
+      orderId = orderRes.data.order?.id || orderRes.data.id;
     }
 
-    // Get Razorpay order info from backend
     const razorpayRes = await axiosInstance.post(`orders/${orderId}/razorpay/`);
     const { razorpay_order_id, amount, currency, razorpay_key } = razorpayRes.data;
 
     if (!razorpay_order_id) throw new Error("Failed to get Razorpay order ID from backend");
 
-    // Return a promise that resolves on successful payment
     return new Promise((resolve, reject) => {
       const options = {
         key: razorpay_key,

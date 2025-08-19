@@ -9,6 +9,7 @@ const OrderDetail = () => {
   const { id: orderId } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [refund, setRefund] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -26,6 +27,17 @@ const OrderDetail = () => {
       try {
         const res = await axiosInstance.get(`orders/${orderId}/`);
         setOrder(res.data);
+
+        // Fetch refund status
+        try {
+          const refundRes = await axiosInstance.get(`orders/${orderId}/refund-status/`);
+          if (refundRes.data?.refund_id) {
+            setRefund(refundRes.data);
+          }
+        } catch (err) {
+          console.warn("No refund info:", err.response?.data?.message || "No refund initiated");
+        }
+
       } catch (error) {
         console.error("Failed to fetch order:", error);
         toast.error(error.response?.data?.detail || "Failed to fetch order details");
@@ -47,43 +59,51 @@ const OrderDetail = () => {
   );
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Order #{order.id}</h1>
+    <div className="max-w-4xl mx-auto p-6 bg-white shadow-md rounded-lg">
+      <h1 className="text-3xl font-bold mb-6 border-b pb-3">Order #{order.id}</h1>
 
       {/* Shipping Address */}
-      <div className="mb-6">
-        <h2 className="font-semibold mb-2">Shipping Address</h2>
-        <p>{order.shipping_address.full_name}</p>
-        <p>{order.shipping_address.address}, {order.shipping_address.city}</p>
-        <p>{order.shipping_address.postal_code}, {order.shipping_address.country}</p>
-        <p>Phone: {order.shipping_address.phone_number}</p>
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+        <h2 className="text-xl font-semibold mb-3">Shipping Address</h2>
+        <p className="text-gray-700">{order.shipping_address.full_name}</p>
+        <p className="text-gray-700">
+          {order.shipping_address.address}, {order.shipping_address.city}
+        </p>
+        <p className="text-gray-700">
+          {order.shipping_address.postal_code}, {order.shipping_address.country}
+        </p>
+        <p className="text-gray-700">Phone: {order.shipping_address.phone_number}</p>
       </div>
 
       {/* Items */}
       <div className="mb-6">
-        <h2 className="font-semibold mb-2">Items</h2>
-        <ul className="divide-y">
+        <h2 className="text-xl font-semibold mb-3">Order Items</h2>
+        <ul className="divide-y border rounded-lg overflow-hidden">
           {order.items.map((item, idx) => {
             const variant = item.product_variant;
             const quantity = item.quantity || 1;
             const price = parseFloat(item.price || variant.price || 0);
-            const imageUrl = variant.product_images?.[0]
-              ? `http://localhost:8000${variant.product_images[0]}`
-              : "/placeholder.png";
+            const imageUrl =
+              variant.images?.[0]?.url ||
+              variant.product_images?.[0] ||
+              "/placeholder.png";
 
             return (
-              <li key={variant.id || `${item.id}-${idx}`} className="py-4 flex justify-between items-center">
+              <li
+                key={variant.id || `${item.id}-${idx}`}
+                className="flex justify-between items-center p-4 hover:bg-gray-50 transition"
+              >
                 <div className="flex items-center space-x-4">
                   <img
                     src={imageUrl}
                     alt={variant.product_name}
-                    className="w-20 h-20 object-cover rounded-md"
+                    className="w-20 h-20 object-cover rounded-md shadow-sm"
                   />
                   <div>
-                    <p className="font-semibold">
-                      {variant.product_name} - {variant.variant_name}
+                    <p className="font-semibold text-gray-800">
+                      {variant.product_name} {variant.variant_name && `- ${variant.variant_name}`}
                     </p>
-                    <p className="text-sm text-gray-500">Qty: {quantity}</p>
+                    <p className="text-gray-500 text-sm">Qty: {quantity}</p>
                   </div>
                 </div>
                 <p className="text-gray-800 font-medium">₹{(price * quantity).toFixed(2)}</p>
@@ -93,44 +113,122 @@ const OrderDetail = () => {
         </ul>
       </div>
 
-      {/* Total, Payment Method & Status */}
-      <div className="mb-6">
-        <p className="text-xl font-bold">Total: ₹{totalAmount.toFixed(2)}</p>
-        <p className="mt-2">
-          Payment Status:{" "}
-          <span className={order.is_paid ? "text-green-600" : "text-red-600"}>
+      {/* Summary */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+        <h2 className="text-xl font-semibold mb-3">Order Summary</h2>
+        <div className="flex justify-between mb-2">
+          <span className="text-gray-700">Total:</span>
+          <span className="font-medium text-gray-900">₹{totalAmount.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between mb-2">
+          <span className="text-gray-700">Payment Method:</span>
+          <span className="font-medium text-gray-900">{order.payment_method || "Not selected"}</span>
+        </div>
+        <div className="flex justify-between mb-2">
+          <span className="text-gray-700">Payment Status:</span>
+          <span className={order.is_paid ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
             {order.is_paid ? "Paid" : "Pending"}
           </span>
-        </p>
-        <p className="mt-1">Order Status: {order.status || "Processing"}</p>
-        <p className="mt-1">
-          Payment Method:{" "}
-          <span className="font-medium">{order.payment_method || "Not selected"}</span>
-        </p>
+        </div>
+        <div className="flex justify-between mb-2">
+          <span className="text-gray-700">Order Status:</span>
+          <span className="font-medium text-gray-900">{order.status || "Processing"}</span>
+        </div>
+
+        {/* Refund Info */}
+        {refund && (
+          <div className="mt-4 border-t pt-4">
+            <h3 className="text-lg font-semibold mb-2">Refund Details</h3>
+            <div className="flex justify-between mb-1">
+              <span className="text-gray-700">Refund ID:</span>
+              <span className="text-gray-900 font-medium">{refund.refund_id}</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span className="text-gray-700">Status:</span>
+              <span
+                className={
+                  refund.refund_status === "completed"
+                    ? "text-green-600 font-medium"
+                    : refund.refund_status === "pending"
+                    ? "text-yellow-600 font-medium"
+                    : "text-red-600 font-medium"
+                }
+              >
+                {refund.refund_status}
+              </span>
+            </div>
+            {refund.refund_status === "pending" && (
+              <div className="mt-2 text-sm text-yellow-700 bg-yellow-100 px-3 py-2 rounded">
+                Refund is pending. Please allow 3–5 business days for processing.
+              </div>
+            )}
+            {refund.refunded_at && (
+              <div className="flex justify-between mb-1">
+                <span className="text-gray-700">Refunded At:</span>
+                <span className="text-gray-900 font-medium">{new Date(refund.refunded_at).toLocaleString()}</span>
+              </div>
+            )}
+            {refund.refund_reason && (
+              <div className="flex justify-between">
+                <span className="text-gray-700">Reason:</span>
+                <span className="text-gray-900 font-medium">{refund.refund_reason}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Pay Now Button */}
       {!order.is_paid && order.payment_method === "Razorpay" && (
-        <button
-          onClick={async () => {
-            try {
-              await handleRazorpayPayment({
-                orderId,
-                onSuccess: async () => {
-                  const updated = await axiosInstance.get(`orders/${orderId}/`);
-                  setOrder(updated.data);
-                  toast.success("Payment successful");
-                },
-              });
-            } catch (err) {
-              console.error(err);
-              toast.error(err.response?.data?.detail || "Failed to initiate payment");
-            }
-          }}
-          className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Pay Now
-        </button>
+        <div className="text-right">
+          <button
+            onClick={async () => {
+              try {
+                await handleRazorpayPayment({
+                  orderId,
+                  onSuccess: async () => {
+                    const updated = await axiosInstance.get(`orders/${orderId}/`);
+                    setOrder(updated.data);
+                    toast.success("Payment successful");
+                  },
+                });
+              } catch (err) {
+                console.error(err);
+                toast.error(err.response?.data?.detail || "Failed to initiate payment");
+              }
+            }}
+            className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
+            Pay Now
+          </button>
+        </div>
+      )}
+
+      {/* Cancel Order Button */}
+      {order.cancelable && order.status !== "cancelled" && (
+        <div className="text-right mt-4">
+          <button
+            onClick={async () => {
+              const reason = prompt("Please enter a reason for cancellation:");
+              if (!reason) return toast.info("Cancellation aborted");
+
+              try {
+                const res = await axiosInstance.post(`orders/${orderId}/cancel/`, {
+                  cancel_reason: reason,
+                });
+                setOrder(res.data.order);
+                navigate("/orders");
+                                toast.success(res.data.message || "Order cancelled successfully");
+              } catch (err) {
+                console.error("Cancel failed:", err);
+                toast.error(err.response?.data?.message || "Failed to cancel order");
+              }
+            }}
+            className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
+          >
+            Cancel Order
+          </button>
+        </div>
       )}
     </div>
   );

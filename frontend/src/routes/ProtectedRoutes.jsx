@@ -12,10 +12,11 @@ const ProtectedRoutes = ({ allowedRoles }) => {
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
-  console.log("DEBUG ProtectedRoutes — allowedRoles:", allowedRoles, "user role:", user?.role);
-  if (allowedRoles && !allowedRoles.includes(user?.role)) {
+ const allowedRolesArray = allowedRoles || [];
+  if (allowedRolesArray.length && !allowedRolesArray.includes(user?.role)) {
     return <Navigate to="/" replace />;
   }
+
 
   return <Outlet />;
 };

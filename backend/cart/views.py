@@ -101,6 +101,10 @@ class CartMergeAPIView(APIView):
         skipped_items = []
         failed_items = []
 
+        # Prefetch variants for performance
+        variant_ids = [i.get("product_variant_id") for i in items if isinstance(i, dict)]
+        variants_map = {v.id: v for v in ProductVariant.objects.filter(id__in=variant_ids)}
+
         for idx, item in enumerate(items):
             print(f"[CartMerge] Processing item {idx + 1}: {item}")
 
@@ -116,13 +120,16 @@ class CartMergeAPIView(APIView):
             validated_data = serializer.validated_data
             variant_id = validated_data['product_variant_id']
             quantity = validated_data['quantity']
+            source = item.get("source", "add_to_cart")  # Optional source tag
 
-            try:
-                variant = ProductVariant.objects.get(id=variant_id)
-                print(f"[CartMerge] Found variant: {variant.id} - {variant.variant_name}")
-            except ProductVariant.DoesNotExist:
+            variant = variants_map.get(variant_id)
+            if not variant:
                 print(f"[CartMerge] Failed: Variant {variant_id} not found")
-                failed_items.append(variant_id)
+                failed_items.append({
+                    "variant_id": variant_id,
+                    "error": "Variant not found",
+                    "item": item
+                })
                 continue
 
             try:
@@ -143,14 +150,17 @@ class CartMergeAPIView(APIView):
 
                 merged_items.append({
                     "variant_id": variant_id,
-                    "quantity": cart_item.quantity
+                    "quantity": cart_item.quantity,
+                    "created": created,
+                    "source": source
                 })
 
             except Exception as e:
                 print(f"[CartMerge] Failed to merge item {variant_id}: {str(e)}")
                 failed_items.append({
                     "variant_id": variant_id,
-                    "error": str(e)
+                    "error": str(e),
+                    "item": item
                 })
 
         print(f"[CartMerge] Merge complete. Merged: {len(merged_items)}, Skipped: {len(skipped_items)}, Failed: {len(failed_items)}")
@@ -174,3 +184,60 @@ class ProductVariantBulkAPIView(APIView):
         serializer = ProductVariantSerializer(variants, many=True, context={'request': request})
         return Response(serializer.data)
 
+
+from decimal import Decimal
+
+class GuestCartDetailsAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        guest_cart = request.data.get("cart", [])
+
+        # Always return consistent empty cart response
+        if not isinstance(guest_cart, list) or not guest_cart:
+            return Response({
+                "items": [],
+                "total_quantity": 0,
+                "total_price": "0.00"
+            }, status=status.HTTP_200_OK)
+
+        # Extract variant IDs
+        variant_ids = [item.get("product_variant_id") for item in guest_cart if item.get("product_variant_id")]
+
+        # Fetch variants efficiently
+        variants = (
+            ProductVariant.objects
+            .filter(id__in=variant_ids)
+            .select_related('product')
+            .prefetch_related('images', 'product__images')
+        )
+
+        serialized_variants = ProductVariantSerializer(variants, many=True).data
+
+        items = []
+        total_quantity = 0
+        total_price = Decimal("0.00")
+
+        # Map variant_id → serialized data for quick lookup
+        variant_map = {v["id"]: v for v in serialized_variants}
+
+        for cart_item in guest_cart:
+            variant_id = cart_item.get("product_variant_id")
+            quantity = int(cart_item.get("quantity", 1))
+
+            variant_data = variant_map.get(variant_id)
+            if variant_data:
+                price = Decimal(str(variant_data.get("price", "0.00")))
+                items.append({
+                    "product_variant_detail": variant_data,
+                    "quantity": quantity,
+                    "price": str(price)
+                })
+                total_quantity += quantity
+                total_price += price * quantity
+
+        return Response({
+            "items": items,
+            "total_quantity": total_quantity,
+            "total_price": str(total_price)
+        }, status=status.HTTP_200_OK)
