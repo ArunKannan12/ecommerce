@@ -9,6 +9,9 @@ from django.template.loader import render_to_string
 from django.core.mail import send_mail
 from django.contrib.auth.password_validation import validate_password
 from accounts.email import CustomPasswordResetEmail
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
 
 User=get_user_model()
 
@@ -21,9 +24,9 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'first_name', 'last_name', 'password',
             'custom_user_profile', 'social_auth_pro_pic',
             'phone_number', 'address', 'pincode',
-            'district', 'city', 'state','auth_provider','role'
+            'district', 'city', 'state','auth_provider','role','last_login_ip','created_at'
         ]
-        read_only_fields = ['id', 'email', 'social_auth_pro_pic'] 
+        read_only_fields = ['id', 'email', 'social_auth_pro_pic','last_login_ip','created_at'] 
     
     def validate(self, attrs):
         password = attrs.get('password')
@@ -87,6 +90,11 @@ class UserSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+class ProfileView(APIView):
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
 
     
 class ResendActivationEmailSerializer(serializers.Serializer):

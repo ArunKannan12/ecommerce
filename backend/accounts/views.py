@@ -314,6 +314,14 @@ class GoogleAuthView(APIView):
                 max_age=7*24*60*60
 
             )
+            # Capture IP address
+            ip = (
+                request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+                or request.META.get("REMOTE_ADDR")
+            )
+            if ip:
+                user.last_login_ip = ip
+                user.save(update_fields=["last_login_ip"])
 
             return response
 

@@ -62,15 +62,19 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL='accounts.CustomUser'
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
-     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', 
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -227,6 +231,8 @@ AUTHENTICATION_BACKENDS = [
 SOCIAL_AUTH_USER_MODEL = 'accounts.CustomUser'
 
 SOCIAL_AUTH_PIPELINE = [
+    'social_core.pipeline.social_auth.associate_user',
+    'accounts.pipeline.capture_login_ip',
     'social_core.pipeline.social_auth.social_details',
     'social_core.pipeline.social_auth.social_uid',
     'social_core.pipeline.social_auth.auth_allowed',

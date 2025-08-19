@@ -1,104 +1,108 @@
+// router.js
+import React, { Suspense, lazy } from "react";
 import { createBrowserRouter } from "react-router-dom";
 import ProtectedRoutes from "./ProtectedRoutes";
 
-// Visitor Pages
-import VisitorHomePage from "../components/visitor/VisitorHomePage";
-import Home from "../components/visitor/Home";
-import Store from "../components/visitor/Store";
-import ProductDetail from "../components/visitor/ProductDetail";
-import Cart from "../components/visitor/Cart";
-import Checkout from "../components/visitor/Checkout";
-import OrderList from "../components/visitor/OrderList";
-import OrderDetail from "../components/visitor/OrderDetail";
-import LoginAndSignup from "../components/visitor/LoginAndSignup";
-import About from "../components/visitor/About";
+// 🔄 Lazy-loaded components
+const VisitorHomePage = lazy(() => import("../components/visitor/VisitorHomePage"));
+const Home = lazy(() => import("../components/visitor/Home"));
+const Store = lazy(() => import("../components/visitor/Store"));
+const ProductDetail = lazy(() => import("../components/visitor/ProductDetail"));
+const Cart = lazy(() => import("../components/visitor/Cart"));
+const Checkout = lazy(() => import("../components/visitor/Checkout"));
+const OrderList = lazy(() => import("../components/visitor/OrderList"));
+const OrderDetail = lazy(() => import("../components/visitor/OrderDetail"));
+const LoginAndSignup = lazy(() => import("../components/visitor/LoginAndSignup"));
+const About = lazy(() => import("../components/visitor/About"));
 
-// Dashboards
-import CustomerDashboard from "../components/customer/CustomerDashboard";
-import AdminDashboard from "../components/admindashboard/AdminDashboard";
-import InvestorDashboard from "../components/investor/InvestorDashboard";
-import PromoterDashboard from "../components/promoter/PromoterDashboard";
-import WarehouseDashboard from "../components/warehousestaff/WarehouseDashboard";
-import DeliveryManDashboard from "../components/deliveryman/DeliveryManDashboard";
+const CustomerDashboard = lazy(() => import("../components/customer/CustomerDashboard"));
+const AdminDashboard = lazy(() => import("../components/admindashboard/AdminDashboard"));
+const InvestorDashboard = lazy(() => import("../components/investor/InvestorDashboard"));
+const PromoterDashboard = lazy(() => import("../components/promoter/PromoterDashboard"));
+const WarehouseDashboard = lazy(() => import("../components/warehousestaff/WarehouseDashboard"));
+const DeliveryManDashboard = lazy(() => import("../components/deliveryman/DeliveryManDashboard"));
 
-// Auth / password / activation
-import ChangePassword from "../components/visitor/ChangePassword";
-import ResetPassword from "../components/visitor/ConfirmResetPassword";
-import FacebookAuth from "../components/visitor/FacebookAuth";
-import GoogleAuth from "../components/visitor/GoogleAuth";
-import ActivateAccount from "../components/visitor/ActivateAccount";
-import VerifyEmail from "../components/visitor/VerifyEmail";
-import ForgotPassword from "../components/visitor/ForgotPassword";
-import ConfirmResetPassword from "../components/visitor/ConfirmResetPassword";
+const ChangePassword = lazy(() => import("../components/visitor/ChangePassword"));
+const FacebookAuth = lazy(() => import("../components/visitor/FacebookAuth"));
+const GoogleAuth = lazy(() => import("../components/visitor/GoogleAuth"));
+const ActivateAccount = lazy(() => import("../components/visitor/ActivateAccount"));
+const VerifyEmail = lazy(() => import("../components/visitor/VerifyEmail"));
+const ForgotPassword = lazy(() => import("../components/visitor/ForgotPassword"));
+const ConfirmResetPassword = lazy(() => import("../components/visitor/ConfirmResetPassword"));
+const Profile = lazy(() => import("../components/visitor/Profile"));
 
+// 🌀 Suspense wrapper
+const withSuspense = (Component) => (
+  <Suspense fallback={<div>Loading...</div>}>
+    {Component}
+  </Suspense>
+);
+
+// 🚀 Router setup
 export const router = createBrowserRouter([
-  // Public + shared layout with Navbar
   {
     path: "/",
-    element: <VisitorHomePage />,
+    element: withSuspense(<VisitorHomePage />),
     children: [
-      { index: true, element: <Home /> },
-      { path: "store/", element: <Store /> },
-      { path: "store/:categorySlug/", element: <Store /> },
-      { path: "products/:productSlug/", element: <ProductDetail /> },
-      { path: "cart/", element: <Cart /> },
-      { path: "login/", element: <LoginAndSignup /> },
-      { path: "about/", element: <About /> },
+      { index: true, element: withSuspense(<Home />) },
+      { path: "store/", element: withSuspense(<Store />) },
+      { path: "store/:categorySlug/", element: withSuspense(<Store />) },
+      { path: "products/:productSlug/", element: withSuspense(<ProductDetail />) },
+      { path: "cart/", element: withSuspense(<Cart />) },
+      { path: "login/", element: withSuspense(<LoginAndSignup />) },
+      { path: "about/", element: withSuspense(<About />) },
 
-      // ✅ Now Checkout + Orders under VisitorHomePage (so Navbar shows)
       {
-        element: <ProtectedRoutes />, // requires login
+        element: <ProtectedRoutes />,
         children: [
-          { path: "checkout/", element: <Checkout /> },
-          { path: "orders/", element: <OrderList /> },
-          { path: "orders/:id/", element: <OrderDetail /> },
+          { path: "profile/", element: withSuspense(<Profile />) },
+          { path: "checkout/", element: withSuspense(<Checkout />) },
+          { path: "orders/", element: withSuspense(<OrderList />) },
+          { path: "orders/:id/", element: withSuspense(<OrderDetail />) },
         ],
       },
     ],
   },
 
-  // Password & activation routes
   {
-    element: (
-      <ProtectedRoutes
-        allowedRoles={["customer", "admin", "investor", "promoter"]}
-      />
-    ),
-    children: [{ path: "/change-password", element: <ChangePassword /> }],
+    element: <ProtectedRoutes allowedRoles={["customer", "admin", "investor", "promoter", "warehouse_staff", "deliveryman"]} />,
+    children: [
+      { path: "/profile", element: withSuspense(<Profile />) },
+      { path: "/change-password", element: withSuspense(<ChangePassword />) },
+    ],
   },
-  {path:"forgot-password/",element:<ForgotPassword/>},
-  { path: "/reset-password-confirm/:uid/:token", element: <ConfirmResetPassword/> },
-  { path: "/activate/:uid/:token", element: <ActivateAccount /> },
-  { path: "/verify-email", element: <VerifyEmail /> },
-  { path: "/auth/facebook", element: <FacebookAuth /> },
-  { path: "/auth/google", element: <GoogleAuth /> },
 
-  // Dashboards (separate, no Navbar)
+  { path: "forgot-password/", element: withSuspense(<ForgotPassword />) },
+  { path: "/reset-password-confirm/:uid/:token", element: withSuspense(<ConfirmResetPassword />) },
+  { path: "/activate/:uid/:token", element: withSuspense(<ActivateAccount />) },
+  { path: "/verify-email", element: withSuspense(<VerifyEmail />) },
+  { path: "/auth/facebook", element: withSuspense(<FacebookAuth />) },
+  { path: "/auth/google", element: withSuspense(<GoogleAuth />) },
+
   {
     element: <ProtectedRoutes allowedRoles={["customer"]} />,
-    children: [{ path: "/customer", element: <CustomerDashboard /> }],
+    children: [{ path: "/customer", element: withSuspense(<CustomerDashboard />) }],
   },
   {
     element: <ProtectedRoutes allowedRoles={["admin"]} />,
-    children: [{ path: "/admin", element: <AdminDashboard /> }],
+    children: [{ path: "/admin", element: withSuspense(<AdminDashboard />) }],
   },
   {
     element: <ProtectedRoutes allowedRoles={["investor"]} />,
-    children: [{ path: "/investor", element: <InvestorDashboard /> }],
+    children: [{ path: "/investor", element: withSuspense(<InvestorDashboard />) }],
   },
   {
     element: <ProtectedRoutes allowedRoles={["promoter"]} />,
-    children: [{ path: "/promoter", element: <PromoterDashboard /> }],
+    children: [{ path: "/promoter", element: withSuspense(<PromoterDashboard />) }],
   },
   {
     element: <ProtectedRoutes allowedRoles={["warehouse_staff"]} />,
-    children: [{ path: "/warehouse", element: <WarehouseDashboard /> }],
+    children: [{ path: "/warehouse", element: withSuspense(<WarehouseDashboard />) }],
   },
   {
     element: <ProtectedRoutes allowedRoles={["deliveryman"]} />,
-    children: [{ path: "/delivery", element: <DeliveryManDashboard /> }],
+    children: [{ path: "/delivery", element: withSuspense(<DeliveryManDashboard />) }],
   },
 
-  // Fallback
-  { path: "*", element: <VisitorHomePage /> },
+  { path: "*", element: withSuspense(<VisitorHomePage />) },
 ]);

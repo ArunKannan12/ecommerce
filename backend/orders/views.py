@@ -643,6 +643,9 @@ class BuyNowAPIView(APIView):
 
         return Response(data, status=status.HTTP_201_CREATED)
     
+from django.utils.dateparse import parse_date
+import logging
+
 class OrderListAPIView(ListAPIView):
     serializer_class = CustomerOrderListSerializer
     permission_classes = [IsCustomer]
@@ -659,8 +662,12 @@ class OrderListAPIView(ListAPIView):
             logger.info(f"User {user.email} filtered orders by status: {status_filter}")
 
         # Optional: filter by date range
-        start_date = parse_date(self.request.query_params.get('start'))
-        end_date = parse_date(self.request.query_params.get('end'))
+        start_param = self.request.query_params.get('start')
+        end_param = self.request.query_params.get('end')
+
+        start_date = parse_date(start_param) if isinstance(start_param, str) else None
+        end_date = parse_date(end_param) if isinstance(end_param, str) else None
+
         if start_date and end_date:
             queryset = queryset.filter(created_at__date__range=(start_date, end_date))
             logger.info(f"User {user.email} filtered orders from {start_date} to {end_date}")

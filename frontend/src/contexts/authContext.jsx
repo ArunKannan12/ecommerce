@@ -28,6 +28,7 @@ export const AuthProvider = ({ children }) => {
       const res = await axiosInstance.get("auth/users/me/", {
         withCredentials: true, // 👈 important for cookies
       });
+      console.log(res.data)
       setUser(res.data);
       setIsAuthenticated(true);
     } catch (error) {

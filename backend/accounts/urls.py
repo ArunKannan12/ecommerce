@@ -10,6 +10,7 @@ from .views import (
     LogoutView,
     SetCSRFCookieView
 )
+from .serializers import ProfileView
 
 urlpatterns = [
     # Djoser default auth routes
@@ -23,7 +24,7 @@ urlpatterns = [
     path('auth/jwt/create/', CookieTokenObtainPairView.as_view(), name='jwt-create'),
     path('auth/jwt/refresh/', CookieTokenRefreshView.as_view(), name='jwt-refresh'),
     path('auth/jwt/logout/', LogoutView.as_view(), name='jwt-logout'),
-
+    path("auth/profile", ProfileView.as_view(), name=""),
     # Social login
     path('auth/social/google/', GoogleAuthView.as_view(), name='google-login'),
     path('auth/social/facebook/', FacebookLoginView.as_view(), name='facebook-login'),

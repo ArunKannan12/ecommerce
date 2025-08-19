@@ -86,6 +86,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     last_password_reset_sent = models.DateTimeField(null=True, blank=True)
     blocked_until_password_reset = models.DateTimeField(null=True, blank=True)
     block_count_password_reset = models.PositiveIntegerField(default=0)
+    last_login_ip = models.GenericIPAddressField(null=True, blank=True)
+
 
     auth_provider=models.CharField( max_length=50,default='email' ,choices=AUTH_PROVIDERS)
 
