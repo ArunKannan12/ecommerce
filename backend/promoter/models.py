@@ -18,7 +18,7 @@ class Promoter(models.Model):
     ]
 
     user=models.OneToOneField(User, on_delete=models.CASCADE)
-    referral_code=models.CharField(unique=True,editable=False,default=generate_random_code)
+    referral_code=models.CharField(unique=True,editable=False,default=generate_random_code,max_length=50)
     phone_number=models.CharField( max_length=50)
     bank_account_number=models.CharField( max_length=50)
     ifsc_code=models.CharField( max_length=50)
