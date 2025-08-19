@@ -3,7 +3,7 @@ services:
     name: ecommerce
     env: python
     buildCommand: "./build.sh"
-    startCommand: "gunicorn todo.wsgi:application"
+    startCommand: "gunicorn backend.wsgi:application"
     envVars:
       - fromDotEnv: true
     plan: free
