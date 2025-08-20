@@ -74,7 +74,7 @@ export const router = createBrowserRouter([
 
   { path: "forgot-password/", element: withSuspense(<ForgotPassword />) },
   { path: "/reset-password-confirm/:uid/:token", element: withSuspense(<ConfirmResetPassword />) },
-  { path: "/activate/:uid/:token", element: withSuspense(<ActivateAccount />) },
+  { path: "/activation/:uid/:token", element: withSuspense(<ActivateAccount />) },
   { path: "/verify-email", element: withSuspense(<VerifyEmail />) },
   { path: "/auth/facebook", element: withSuspense(<FacebookAuth />) },
   { path: "/auth/google", element: withSuspense(<GoogleAuth />) },
