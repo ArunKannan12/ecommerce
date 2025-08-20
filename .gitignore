@@ -41,3 +41,8 @@ frontend/.env.production
 # --- OS Files ---
 .DS_Store
 Thumbs.db
+!.env.example
+
+**/__pycache__/
+**/*.py[cod]
+.vite/
