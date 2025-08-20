@@ -210,7 +210,7 @@ SIMPLE_JWT = {
 DJOSER = {
     'LOGIN_FIELD': 'email',
     "EMAIL_FRONTEND_SITE_NAME": 'auth',
-    'ACTIVATION_URL': 'activate/{uid}/{token}/',
+    'ACTIVATION_URL': 'activate/{uid}/{token}',
     'SEND_CONFIRMATION_EMAIL': True,
     "EMAIL": {
         "activation": "accounts.email.CustomActivationEmail",
