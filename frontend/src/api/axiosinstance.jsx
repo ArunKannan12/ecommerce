@@ -3,6 +3,8 @@ import { getCsrfToken } from "../utils/csrf";
 
 const axiosInstance = axios.create({
   baseURL: "http://localhost:8000/api/",
+  // baseURL:"https://ecommerce-ml5v.onrender.com/api",
+
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",

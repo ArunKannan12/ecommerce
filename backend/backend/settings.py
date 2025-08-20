@@ -124,6 +124,12 @@ else:
         }
     }
 
+if ENVIRONMENT == 'production':
+    FRONTEND_URL = os.getenv('FRONTEND_URL_PROD')
+else:
+    FRONTEND_URL = os.getenv('FRONTEND_URL_DEV')
+
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -302,7 +308,7 @@ SOCIAL_AUTH_FACEBOOK_PROFILE_EXTRA_PARAMS = {
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:5173")
+
 
 # Razorpay credentials (test mode)
 RAZORPAY_KEY_ID = env('RAZORPAY_KEY_ID')
