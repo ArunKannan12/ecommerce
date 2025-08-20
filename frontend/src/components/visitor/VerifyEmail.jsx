@@ -16,7 +16,7 @@ const VerifyEmail = () => {
   useEffect(() => {
     if (!preFilledEmail) {
       toast.error("Email not found. Please sign up again.");
-      navigate("/signup");
+      navigate('/login', { state: { mode: 'signup' } });
     }
   }, [preFilledEmail, navigate]);
 

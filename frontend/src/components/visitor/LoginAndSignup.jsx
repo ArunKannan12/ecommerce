@@ -35,14 +35,7 @@ const LoginAndSignup = () => {
   });
   const [signupErrors, setSignupErrors] = useState({});
 
-  /*** EFFECTS ***/
-  useEffect(() => {
-    inputFocus.current?.focus();
-    if (isAuthenticated) {
-      const from = location.state?.from || '/';
-      navigate(from, { replace: true });
-    }
-  }, [isAuthenticated, navigate, location.state]);
+  
 
   /*** COMMON FUNCTIONS ***/
   const togglePassword = () => setShowPassword(prev => !prev);
@@ -61,28 +54,34 @@ const LoginAndSignup = () => {
   };
 
   const handleLoginSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  const errors = validateLogin();
-  if (Object.keys(errors).length > 0) {
-    setLoginErrors(errors);
-    return;
-  }
-
-  try {
-    setLoading(true);
-    const redirectFrom = location.state?.from || "/"; // ← preserve the intended page
-    const res = await login(loginData, null, redirectFrom); 
-    if (res.success) {
-      toast.success("Login successful");
-      navigate(res.from, { replace: true }); // ← redirect to checkout or intended page
+    const errors = validateLogin();
+    if (Object.keys(errors).length > 0) {
+      setLoginErrors(errors);
+      return;
     }
-  } catch (err) {
-    toast.error("Invalid email or password!");
-  } finally {
-    setLoading(false);
-  }
-};
+
+    try {
+      setLoading(true);
+      const redirectFrom = location.state?.from || "/"; // ← preserve the intended page
+      const res = await login(loginData, null, redirectFrom); 
+
+     if (res.success) {
+        if (!res.data.is_active) {
+          toast.info("Your account isn't verified yet. Please check your email.");
+          navigate('/verify-email', { state: { email: loginData.email } });
+        } else {
+          toast.success("Login successful");
+          navigate(res.from, { replace: true });
+        }
+      }
+    } catch (err) {
+      toast.error("Invalid email or password!");
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   /*** SIGNUP FUNCTIONS ***/
@@ -149,6 +148,27 @@ const LoginAndSignup = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (location.state?.mode) {
+      setIsLogin(location.state.mode === 'login' ? true : false);
+      navigate('/login', { replace: true, state: {} }); // Clear mode from history
+    }
+  }, []);
+
+  useEffect(() => {
+    inputFocus.current?.focus();
+
+    if (location.state?.mode) {
+      setIsLogin(location.state.mode === 'login');
+      navigate('/login', { replace: true, state: {} }); // Clear mode from history
+    }
+
+    if (isAuthenticated) {
+      const from = location.state?.from || '/';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, location.state]);
 
   return (
     <div className="min-h-screen flex justify-center bg-gray-100 px-4 py-12">
