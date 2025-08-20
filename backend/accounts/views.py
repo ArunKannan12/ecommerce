@@ -301,7 +301,7 @@ class GoogleAuthView(APIView):
                 key='access_token',
                 value=access_token,
                 httponly=True,
-                secure=secure,
+                secure = not settings.DEBUG,
                 samesite='Lax',
                 max_age=3600
             )
@@ -309,7 +309,7 @@ class GoogleAuthView(APIView):
                 key='refresh_token',
                 value=refresh_token,
                 httponly=True,
-                secure=secure,
+                secure = not settings.DEBUG,
                 samesite='Lax',
                 max_age=7*24*60*60
 
@@ -430,7 +430,7 @@ class FacebookLoginView(GenericAPIView):
                 key='access_token',
                 value=access_token,
                 httponly=True,
-                secure=secure,
+                secure = not settings.DEBUG,
                 samesite='Lax',
                 max_age=3600
             )
@@ -438,9 +438,10 @@ class FacebookLoginView(GenericAPIView):
                 key='refresh_token',
                 value=refresh_token,
                 httponly=True,
-                secure=secure,
+                secure = not settings.DEBUG,
                 samesite='Lax',
-                max_age=7*24*60*60
+                max_age=7*24*60*60,
+                path='/'
 
             )
 
@@ -471,7 +472,7 @@ class CookieTokenRefreshView(TokenRefreshView):
                 key='access_token',
                 value=new_access_token,
                 httponly=True,
-                secure=secure,  # False for development
+                secure = not settings.DEBUG,  # False for development
                 samesite='Lax',
                 max_age=60 * 60
             )
@@ -479,9 +480,10 @@ class CookieTokenRefreshView(TokenRefreshView):
                 key='refresh_token',
                 value=new_refresh_token,
                 httponly=True,
-                secure=secure,
+                secure = not settings.DEBUG,
                 samesite='Lax',
-                max_age=7 * 24 * 60 * 60
+                max_age=7 * 24 * 60 * 60,
+                path='/'
             )
             return response
 
@@ -520,7 +522,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 key='access_token',
                 value=access,
                 httponly=True,
-                secure=False,  # Use False during local dev
+                secure = not settings.DEBUG,  # Use False during local dev
                 samesite='Lax',
                 max_age=60 * 60  # 1 hour
             )
@@ -530,17 +532,19 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                     key='refresh_token',
                     value=refresh,
                     httponly=True,
-                    secure=False,
+                    secure = not settings.DEBUG,
                     samesite='Lax',
-                    max_age=7 * 24 * 60 * 60  # 7 days
+                    max_age=7 * 24 * 60 * 60,
+                    path='/'  # 7 days
                 )
             else:
                 res.set_cookie(
                     key='refresh_token',
                     value=refresh,
                     httponly=True,
-                    secure=False,
-                    samesite='Lax'
+                    secure = not settings.DEBUG,
+                    samesite='Lax',
+                    path='/'
                 )
             return res
 
