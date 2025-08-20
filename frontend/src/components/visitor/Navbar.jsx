@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, ChevronDown, User } from "lucide-react";
 import { useGetCartQuery } from "../../contexts/cartSlice";
-import { useAuth } from "../../contexts/AuthContext";
 import MobileMenu from "./MobileMenu";
+import { useAuth } from "../../contexts/authContext";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);

@@ -3,7 +3,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { toast } from 'react-toastify';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosinstance';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/authContext';
 
 const GoogleAuth = () => {
   const navigate = useNavigate();

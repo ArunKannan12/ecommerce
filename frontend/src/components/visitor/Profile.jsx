@@ -1,7 +1,7 @@
 import { useState,useEffect } from 'react';
 import { Tabs, Tab } from 'react-bootstrap';
 import ProfileEditModal from './ProfileEditModal';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/authContext';
 
 
 const Profile = () => {

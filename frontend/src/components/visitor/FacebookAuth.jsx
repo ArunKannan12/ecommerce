@@ -2,8 +2,8 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FaFacebook } from 'react-icons/fa';
-import { useAuth } from '../../contexts/AuthContext';
 import axiosInstance from '../../api/axiosinstance';
+import { useAuth } from '../../contexts/authContext';
 
 const FacebookAuth = () => {
   const navigate = useNavigate();

@@ -4,8 +4,8 @@ import axiosInstance from '../../api/axiosinstance';
 import { toast } from 'react-toastify';
 import ProductDetailShimmer from '../../shimmer/ProductDetailShimmer';
 import { useAddToCartMutation, useGetCartQuery } from '../../contexts/cartSlice';
-import { useAuth } from '../../contexts/AuthContext';
 import { syncGuestcart } from '../../utils/syncGuestCart';
+import { useAuth } from '../../contexts/authContext';
 
 
 const ProductDetail = () => {

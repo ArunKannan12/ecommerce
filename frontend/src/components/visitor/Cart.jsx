@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import CartShimmer from "../../shimmer/CartShimmer";
-import { useAuth } from "../../contexts/AuthContext";
 import axiosInstance from "../../api/axiosinstance";
 import {
   useGetCartQuery,
@@ -9,6 +8,7 @@ import {
   useRemoveCartItemMutation,
 } from "../../contexts/cartSlice";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/authContext";
 
 const Cart = () => {
   const { isAuthenticated } = useAuth();

@@ -4,8 +4,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import GoogleAuth from './GoogleAuth';
 import FacebookAuth from './FacebookAuth';
-import { useAuth } from '../../contexts/AuthContext';
 import axiosInstance from '../../api/axiosinstance';
+import { useAuth } from '../../contexts/authContext';
 
 const LoginAndSignup = () => {
   const navigate = useNavigate();

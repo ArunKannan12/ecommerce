@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { useAuth } from "../../contexts/AuthContext";
 import axiosInstance from "../../api/axiosinstance";
 import { useGetCartQuery } from "../../contexts/cartSlice";
 import CartItemList from "./CartItemList";
@@ -9,6 +8,7 @@ import ShippingAddressSelector from "./ShippingAddressSelector";
 import PaymentMethodSelector from "./PaymentMethodSelector";
 import CheckoutSummary from "./CheckoutSummary";
 import { handleRazorpayPayment } from "../../utils/payment";
+import { useAuth } from "../../contexts/authContext";
 
 const BUY_NOW_KEY = "buyNowMinimal";
 
