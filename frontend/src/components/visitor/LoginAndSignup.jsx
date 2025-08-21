@@ -66,18 +66,25 @@ const LoginAndSignup = () => {
       setLoading(true);
       const redirectFrom = location.state?.from || "/"; // ← preserve the intended page
       const res = await login(loginData, null, redirectFrom); 
+      console.log('res',res);
+      
 
      if (res.success) {
-        if (!res.data.is_active) {
-          toast.info("Your account isn't verified yet. Please check your email.");
-          navigate('/verify-email', { state: { email: loginData.email } });
-        } else {
           toast.success("Login successful");
           navigate(res.from, { replace: true });
+        } else if (res.reason === "unverified") {
+          navigate("/verify-email", { state: { email: res.email } });
         }
-      }
+
     } catch (err) {
-      toast.error("Invalid email or password!");
+      console.log('eer',err);
+      
+      const backendMessage =
+        err.response?.data?.detail ||
+        err.response?.data?.message ||
+        "❌ Login failed. Please check your credentials.";
+
+      toast.error(backendMessage);
     } finally {
       setLoading(false);
     }
@@ -212,7 +219,7 @@ const LoginAndSignup = () => {
               )}
               <span
                 onClick={togglePassword}
-                className="absolute top-3.5 right-3 text-gray-500 cursor-pointer"
+                className="absolute bottom-3 right-5 text-gray-500 cursor-pointer"
               >
                 {showPassword ? <FaEyeSlash /> : <FaEye />}
               </span>

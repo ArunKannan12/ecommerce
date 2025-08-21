@@ -13,12 +13,22 @@ const axiosInstance = axios.create({
 });
 
 // Response interceptor
+axiosInstance.interceptors.request.use(config => {
+  const csrfToken = getCsrfToken(); // reads from document.cookie
+  if (csrfToken) {
+    config.headers["X-CSRFToken"] = csrfToken;
+  } else {
+    console.warn("⚠️ CSRF token not found in cookies");
+  }
+  return config;
+});
+
+// 🔄 Auto-refresh access token on 401
 axiosInstance.interceptors.response.use(
   response => response,
-  async (error) => {
+  async error => {
     const originalRequest = error.config;
 
-    // Only retry once
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
@@ -26,12 +36,11 @@ axiosInstance.interceptors.response.use(
     ) {
       originalRequest._retry = true;
 
-      // Only try refresh if user has refresh token (cookie)
       try {
         await axiosInstance.post("auth/jwt/refresh/");
         return axiosInstance(originalRequest);
       } catch (refreshError) {
-        console.error("Token refresh failed:", refreshError);
+        console.error("🔒 Token refresh failed:", refreshError);
         return Promise.reject(refreshError);
       }
     }

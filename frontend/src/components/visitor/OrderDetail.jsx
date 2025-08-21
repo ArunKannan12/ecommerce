@@ -65,9 +65,12 @@ const OrderDetail = () => {
       {/* Shipping Address */}
       <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
         <h2 className="text-xl font-semibold mb-3">Shipping Address</h2>
-        <p className="text-gray-700">{order.shipping_address.full_name}</p>
+        <p className="text-gray-700 font-medium">{order.shipping_address.full_name}</p>
         <p className="text-gray-700">
-          {order.shipping_address.address}, {order.shipping_address.city}
+          {order.shipping_address.address}, {order.shipping_address.locality}, {order.shipping_address.region}
+        </p>
+        <p className="text-gray-700">
+          {order.shipping_address.district}, {order.shipping_address.state}, {order.shipping_address.city}
         </p>
         <p className="text-gray-700">
           {order.shipping_address.postal_code}, {order.shipping_address.country}
@@ -79,13 +82,16 @@ const OrderDetail = () => {
       <div className="mb-6">
         <h2 className="text-xl font-semibold mb-3">Order Items</h2>
         <ul className="divide-y border rounded-lg overflow-hidden">
-          {order.items.map((item, idx) => {
+          {
+          // console.log('orders items from ordr detail page',order),
+          
+          order.items.map((item, idx) => {
             const variant = item.product_variant;
             const quantity = item.quantity || 1;
             const price = parseFloat(item.price || variant.price || 0);
-            const imageUrl =
+           const imageUrl =
               variant.images?.[0]?.url ||
-              variant.product_images?.[0] ||
+              (typeof variant.product_images?.[0] === "string" ? variant.product_images[0] : null) ||
               "/placeholder.png";
 
             return (

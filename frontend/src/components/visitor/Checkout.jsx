@@ -173,10 +173,15 @@ const Checkout = () => {
       } else {
         const endpoint = isBuyNowFlow ? "checkout/buy-now/" : "checkout/cart/";
         const payload = {
-          items: itemsPayload,
-          shipping_address: selectedAddress.id,
-          payment_method: paymentMethod,
-        };
+            items: itemsPayload,
+            payment_method: paymentMethod,
+          };
+
+          if (selectedAddress.id) {
+            payload.shipping_address_id = selectedAddress.id;
+          } else {
+            payload.shipping_address = cleanAddress;
+          }
         console.log("Checkout payload:", payload);
         const res = await axiosInstance.post(endpoint, payload);
         orderId = res.data.id;

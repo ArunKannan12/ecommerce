@@ -2,7 +2,9 @@ import { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../api/axiosinstance";
 import { useMergeGuestCartMutation } from "./cartSlice";
 import { syncGuestcart } from "../utils/syncGuestCart";
+import { toast } from "react-toastify";
 
+// Create context
 export const AuthContext = createContext({
   user: null,
   isAuthenticated: false,
@@ -14,91 +16,102 @@ export const AuthContext = createContext({
   isAdmin: () => false,
 });
 
+// CSRF setup
+const ensureCsrfCookie = async () => {
+  try {
+    await axiosInstance.get("auth/csrf/");
+  } catch (err) {
+    console.error("CSRF cookie setup failed:", err);
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-
   const [mergeGuestCart] = useMergeGuestCartMutation();
 
   // ✅ Fetch logged-in user
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const res = await axiosInstance.get("auth/users/me/", {
-        withCredentials: true, // 👈 important for cookies
-      });
-      console.log(res.data)
+      const res = await axiosInstance.get("auth/users/me/");
       setUser(res.data);
       setIsAuthenticated(true);
+      return res.data;
     } catch (error) {
       setUser(null);
       setIsAuthenticated(false);
+      return null;
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ Initial load: setup CSRF + fetch user
   useEffect(() => {
-    fetchProfile();
+    ensureCsrfCookie().then(fetchProfile);
   }, []);
 
   // ✅ Login (email/password or OAuth)
-const login = async (credentials = null, tokenData = null, redirectFrom = "/") => {
-  setLoading(true);
-  try {
-    // 1️⃣ Create JWT if credentials provided
-    if (credentials) {
-      await axiosInstance.post("auth/jwt/create/", credentials, {
-        withCredentials: true,
-      });
+  const login = async (credentials = null, tokenData = null, redirectFrom = "/") => {
+    setLoading(true);
+    try {
+      await ensureCsrfCookie();
+
+      if (credentials) {
+        await axiosInstance.post("auth/jwt/create/", credentials);
+      }
+
+      const user = await fetchProfile();
+
+      if (!user?.is_active || !user?.is_verified) {
+        toast.info("Your account isn't verified yet. Please check your email.");
+        setUser(null);
+        setIsAuthenticated(false);
+        return {
+          success: false,
+          reason: "unverified",
+          email: credentials?.email,
+        };
+      }
+
+      // ✅ Merge guest cart (Buy Now + regular)
+      const buyNowMinimal = JSON.parse(sessionStorage.getItem("buyNowMinimal") || "null");
+      if (buyNowMinimal) {
+        const itemsToMerge = Array.isArray(buyNowMinimal) ? buyNowMinimal : [buyNowMinimal];
+        await syncGuestcart(mergeGuestCart, itemsToMerge);
+      }
+
+      const guestCart = JSON.parse(localStorage.getItem("cart") || "[]");
+      if (guestCart.length > 0) {
+        await syncGuestcart(mergeGuestCart, guestCart);
+      }
+
+      setIsAuthenticated(true);
+      return { success: true, from: redirectFrom };
+    } catch (err) {
+      console.error("Login failed", err);
+
+      const backendMessage =
+        err.response?.data?.detail ||
+        err.response?.data?.message ||
+        "❌ Login failed. Please check your credentials.";
+
+      toast.error(backendMessage);
+      setUser(null);
+      setIsAuthenticated(false);
+      return { success: false, error: err };
+    } finally {
+      setLoading(false);
     }
-
-    // 2️⃣ Fetch user profile
-    await fetchProfile();
-
-    // 3️⃣ Merge guest Buy Now item (if any)
-    const buyNowMinimal = JSON.parse(sessionStorage.getItem("buyNowMinimal") || "null");
-    if (buyNowMinimal) {
-      // Ensure payload is an array
-      const itemsToMerge = Array.isArray(buyNowMinimal) ? buyNowMinimal : [buyNowMinimal];
-      console.log("[CartMerge] Merging guest Buy Now item:", itemsToMerge);
-      await syncGuestcart(mergeGuestCart, itemsToMerge);
-      
-    }
-
-    // 4️⃣ Merge guest cart items (if any)
-    const guestCart = JSON.parse(localStorage.getItem("cart") || "[]");
-    if (guestCart.length > 0) {
-      console.log("[CartMerge] Merging guest cart items:", guestCart);
-      await syncGuestcart(mergeGuestCart, guestCart);
-     
-    }
-
-    // 5️⃣ Mark as authenticated
-    setIsAuthenticated(true);
-
-    // 6️⃣ Return success + redirect info
-    return { success: true, from: redirectFrom };
-  } catch (err) {
-    console.error("Login failed", err);
-    setUser(null);
-    setIsAuthenticated(false);
-    return { success: false, error: err };
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-
-
+  };
 
   // ✅ Logout
   const logout = async () => {
     setLoading(true);
     try {
-      await axiosInstance.post("auth/jwt/logout/", {}, { withCredentials: true });
+      await axiosInstance.post("auth/jwt/logout/");
     } catch (error) {
       console.warn("Logout error", error);
     } finally {
@@ -108,6 +121,7 @@ const login = async (credentials = null, tokenData = null, redirectFrom = "/") =
     }
   };
 
+  // ✅ Role-based access
   const hasRole = (role) => {
     if (!user) return false;
     if (Array.isArray(user.roles)) return user.roles.includes(role);

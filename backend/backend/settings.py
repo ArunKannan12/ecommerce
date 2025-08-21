@@ -59,6 +59,8 @@ INSTALLED_APPS = [
    
 ]
 
+
+
 AUTH_USER_MODEL='accounts.CustomUser'
 
 MIDDLEWARE = [
@@ -201,7 +203,7 @@ SIMPLE_JWT = {
 
     'AUTH_COOKIE': 'access_token',  # Name for access token cookie
     'AUTH_COOKIE_REFRESH': 'refresh_token',  # Name for refresh token cookie
-    'AUTH_COOKIE_SECURE': False,  # True in production (HTTPS)
+    'AUTH_COOKIE_SECURE': True,  # True in production (HTTPS)
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_PATH': '/',
     'AUTH_COOKIE_SAMESITE': 'Lax',
@@ -272,10 +274,14 @@ STATIC_URL = '/static/'
 
 CORS_ALLOW_CREDENTIALS = True
 CSRF_COOKIE_SECURE = True
-CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
 CORS_ALLOWED_ORIGINS = [
     "https://beston.netlify.app",
+    "http://localhost:5173"
 ]
+
+CSRF_COOKIE_NAME = 'csrftoken'
+CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
 
 
 
@@ -322,4 +328,5 @@ RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
 
 CSRF_TRUSTED_ORIGINS = [
     "https://beston.netlify.app",
+    'http://localhost:3000'
 ]

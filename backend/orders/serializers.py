@@ -31,7 +31,7 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
     
     
 class OrderSerializer(serializers.ModelSerializer):
-    shipping_address = ShippingAddressSerializer(read_only=True)
+    shipping_address = ShippingAddressSerializer(required=False)
     shipping_address_id = serializers.PrimaryKeyRelatedField(
         queryset=ShippingAddress.objects.all(),
         write_only=True, required=False, allow_null=True

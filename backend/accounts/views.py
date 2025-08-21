@@ -10,6 +10,8 @@ from .serializers import (ResendActivationEmailSerializer,
                             FacebookLoginSerializer,
                             
                             )
+from django.middleware.csrf import get_token
+
 import math
 from djoser.utils import encode_uid
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -457,38 +459,28 @@ class CookieTokenRefreshView(TokenRefreshView):
             return Response({'error': 'No refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            # Validate and rotate the token
             token = RefreshToken(refresh_token)
             new_access_token = str(token.access_token)
+            new_refresh_token = str(token)
+            token.blacklist()
 
-            # If rotating, generate a new refresh token
-            if True:  # Optional: check your settings
-                new_refresh_token = str(token)
-                token.blacklist()  # Blacklist old one if setting is enabled
-
-            # Create response and set new tokens
             response = Response({'message': 'Token refreshed'}, status=status.HTTP_200_OK)
-            response.set_cookie(
-                key='access_token',
-                value=new_access_token,
-                httponly=True,
-                secure = not settings.DEBUG,  # False for development
-                samesite='Lax',
-                max_age=60 * 60
-            )
-            response.set_cookie(
-                key='refresh_token',
-                value=new_refresh_token,
-                httponly=True,
-                secure = not settings.DEBUG,
-                samesite='Lax',
-                max_age=7 * 24 * 60 * 60,
-                path='/'
-            )
+
+            response.set_cookie('access_token', new_access_token, httponly=True, secure=not settings.DEBUG,
+                                samesite='Lax', path='/', max_age=60 * 60)
+            response.set_cookie('refresh_token', new_refresh_token, httponly=True, secure=not settings.DEBUG,
+                                samesite='Lax', path='/', max_age=7 * 24 * 60 * 60)
+
+            # Refresh CSRF token
+            csrf_token = get_token(request)
+            response.set_cookie('csrftoken', csrf_token, httponly=False, secure=not settings.DEBUG,
+                                samesite='Lax', path='/', max_age=60 * 60)
+
             return response
 
         except TokenError:
             return Response({'error': 'Invalid or expired refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
+
 
 class CookieTokenObtainPairView(TokenObtainPairView):
     permission_classes = [AllowAny]
@@ -496,74 +488,60 @@ class CookieTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
 
-        if response.status_code == 200:
-            refresh = response.data.get('refresh')
-            access = response.data.get('access')
+        if response.status_code != 200:
+            return response  # Login failed
 
-            # Return only a success message (tokens go in cookies)
-            user = CustomUser.objects.get(email=request.data.get('email'))
-            if not user.is_verified:
-                return Response({'error':'user in not verified'},status=status.HTTP_403_FORBIDDEN)
-            remember_me=request.data.get('remember_me',False)
-            res = Response({
-                'message': 'Login successful'
-                ,'access': access,
-                'refresh': refresh,
-                'email':user.email,
-                'role':user.role,
+        refresh = response.data.get('refresh')
+        access = response.data.get('access')
+        email = request.data.get('email')
 
-                'first_name': user.first_name,
-                'last_name': user.last_name
-                },
-                  status=status.HTTP_200_OK)
-            
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            res.set_cookie(
-                key='access_token',
-                value=access,
-                httponly=True,
-                secure = not settings.DEBUG,  # Use False during local dev
-                samesite='Lax',
-                max_age=60 * 60  # 1 hour
-            )
-            if remember_me:
+        if not user.is_verified:
+            return Response({'error': 'User is not verified'}, status=status.HTTP_403_FORBIDDEN)
 
-                res.set_cookie(
-                    key='refresh_token',
-                    value=refresh,
-                    httponly=True,
-                    secure = not settings.DEBUG,
-                    samesite='Lax',
-                    max_age=7 * 24 * 60 * 60,
-                    path='/'  # 7 days
-                )
-            else:
-                res.set_cookie(
-                    key='refresh_token',
-                    value=refresh,
-                    httponly=True,
-                    secure = not settings.DEBUG,
-                    samesite='Lax',
-                    path='/'
-                )
-            return res
+        remember_me = request.data.get('remember_me', False)
+        res = Response({
+            'message': 'Login successful',
+            'email': user.email,
+            'role': user.role,
+            'first_name': user.first_name,
+            'last_name': user.last_name
+        }, status=status.HTTP_200_OK)
 
-        # Return original response if login fails (e.g. 401)
-        return response
+        # Set access token cookie
+        res.set_cookie('access_token', access, httponly=True, secure=not settings.DEBUG,
+                   samesite='Lax', path='/', max_age=60 * 60)
+        res.set_cookie('refresh_token', refresh, httponly=True, secure=not settings.DEBUG,
+                    samesite='Lax', path='/', max_age=7 * 24 * 60 * 60 if remember_me else None)
+
+        # 🔐 Set CSRF token cookie
+        csrf_token = get_token(request)
+        res.set_cookie('csrftoken', csrf_token, httponly=False, secure=not settings.DEBUG,
+                    samesite='Lax', path='/', max_age=60 * 60)
+
+        return res
+
     
 class LogoutView(APIView):
-    permission_classes=[IsAuthenticated]
-    def post(self, request):
-        try:
-            refresh_token = request.COOKIES.get('refresh_token')
-            token = RefreshToken(refresh_token)
-            token.blacklist()  # <-- This line
-        except Exception:
-            pass  # Optional: log invalid or missing token
+    permission_classes = [IsAuthenticated]
 
-        response = Response({'message': 'Logged out successfully'})
-        response.delete_cookie('access_token')
-        response.delete_cookie('refresh_token')
+    def post(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except TokenError:
+                pass  # Optional: log invalid token
+
+        response = Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
+        response.delete_cookie('access_token', path='/')
+        response.delete_cookie('refresh_token', path='/')
+        response.delete_cookie('csrftoken',path='/')
         return response
     
 
