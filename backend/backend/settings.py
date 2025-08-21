@@ -74,7 +74,7 @@ if DEBUG:
     MEDIA_ROOT = BASE_DIR / "media"
 else:
     DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
-    MEDIA_URL = "/media/"  # let Cloudinary storage overwrite with the right URL
+    MEDIA_URL = "https://res.cloudinary.com/dnspivrbc/"  # let Cloudinary storage overwrite with the right URL
 
 
 
