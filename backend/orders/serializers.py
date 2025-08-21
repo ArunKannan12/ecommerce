@@ -7,6 +7,15 @@ from rest_framework.validators import UniqueTogetherValidator
 from promoter.models import Promoter
 from .utils import get_pincode_details
 
+
+DUMMY_LOCALITY_CHOICES = [
+    ("Gudalur", "Gudalur"),
+    ("Ooty", "Ooty"),
+   
+]
+
+
+
 class ShippingAddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShippingAddress
@@ -81,7 +90,7 @@ class ShippingAddressInputSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=100)
     phone_number = serializers.CharField(max_length=20)
     address = serializers.CharField()
-    locality = serializers.ChoiceField(choices=[], required=True)
+    locality = serializers.ChoiceField(choices=DUMMY_LOCALITY_CHOICES, required=True)
     city = serializers.CharField(max_length=50)
     district = serializers.CharField(max_length=50, required=False, allow_blank=True)
     state = serializers.CharField(max_length=50)

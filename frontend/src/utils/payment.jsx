@@ -30,11 +30,15 @@ export const handleRazorpayPayment = async ({
       }
 
       const endpoint = isBuyNowFlow ? "checkout/buy-now/" : "checkout/cart/";
-      const orderRes = await axiosInstance.post(endpoint, {
+      const payload = {
         items,
-        shipping_address,
         payment_method,
-      });
+        ...(typeof shipping_address === "object"
+          ? { shipping_address }
+          : { shipping_address_id: shipping_address }),
+      };
+
+      const orderRes = await axiosInstance.post(endpoint, payload);
 
       orderId = orderRes.data.order?.id || orderRes.data.id;
     }

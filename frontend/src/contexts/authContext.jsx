@@ -37,6 +37,8 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await axiosInstance.get("auth/users/me/");
       setUser(res.data);
+      console.log('data from context',res.data);
+      
       setIsAuthenticated(true);
       return res.data;
     } catch (error) {

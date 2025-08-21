@@ -9,6 +9,7 @@ import PaymentMethodSelector from "./PaymentMethodSelector";
 import CheckoutSummary from "./CheckoutSummary";
 import { handleRazorpayPayment } from "../../utils/payment";
 import { useAuth } from "../../contexts/authContext";
+import {useDispatch } from 'react-redux'
 
 const BUY_NOW_KEY = "buyNowMinimal";
 
@@ -16,7 +17,7 @@ const Checkout = () => {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-
+  const dispatch = useDispatch();
   const [buyNowItems, setBuyNowItems] = useState([]);
   const [guestCartItems, setGuestCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -137,67 +138,105 @@ const Checkout = () => {
     }));
 
   const handlePlaceOrder = async () => {
-    const isBuyNowFlow = buyNowItems?.length > 0;
-    const itemsToUse = isBuyNowFlow ? buyNowItems : cartItems;
+      const isBuyNowFlow = buyNowItems?.length > 0;
+      const itemsToUse = isBuyNowFlow ? buyNowItems : cartItems;
 
-    if (!itemsToUse.length) {
-      toast.error("Your cart is empty");
-      return;
-    }
+      if (!itemsToUse.length) {
+        toast.error("Your cart is empty");
+        return;
+      }
 
-    if (!selectedAddress) {
-      toast.error("Please select a shipping address");
-      return;
-    }
+      if (!selectedAddress) {
+        toast.error("Please select a shipping address");
+        return;
+      }
 
-    if (!paymentMethod) {
-      toast.error("Please select a payment method");
-      return;
-    }
+      if (!paymentMethod) {
+        toast.error("Please select a payment method");
+        return;
+      }
 
-    const { full_name, phone_number, address, city, postal_code, country } = selectedAddress;
-    const cleanAddress = { full_name, phone_number, address, city, postal_code, country };
-    const itemsPayload = buildItemsPayload(itemsToUse);
+      const {
+        full_name,
+        phone_number,
+        address,
+        city,
+        postal_code,
+        country,
+        locality,
+        district,
+        state,
+        region,
+      } = selectedAddress;
 
-    try {
-      let orderId;
+      const cleanAddress = {
+        full_name,
+        phone_number,
+        address,
+        city,
+        postal_code,
+        country,
+        locality: locality || "",
+        district: district || "",
+        state,
+        region: region || "",
+      };
 
-      if (paymentMethod === "Razorpay") {
-        orderId = await handleRazorpayPayment({
-          order_id: pendingOrderId,
-          items: itemsPayload,
-          shipping_address: selectedAddress.id,
-          isBuyNowFlow,
-        });
-        setPendingOrderId(orderId);
-      } else {
+      const itemsPayload = buildItemsPayload(itemsToUse);
+
+      try {
         const endpoint = isBuyNowFlow ? "checkout/buy-now/" : "checkout/cart/";
         const payload = {
             items: itemsPayload,
             payment_method: paymentMethod,
+            ...(selectedAddress.id
+              ? { shipping_address_id: selectedAddress.id }
+              : { shipping_address: cleanAddress }),
           };
 
-          if (selectedAddress.id) {
-            payload.shipping_address_id = selectedAddress.id;
-          } else {
-            payload.shipping_address = cleanAddress;
-          }
-        console.log("Checkout payload:", payload);
-        const res = await axiosInstance.post(endpoint, payload);
-        orderId = res.data.id;
-      }
 
-      toast.success("Order placed successfully");
-      if (!isBuyNowFlow && !isAuthenticated) localStorage.removeItem("cart");
-      if (isBuyNowFlow) sessionStorage.removeItem(BUY_NOW_KEY);
-      setPendingOrderId(null);
-      setBuyNowItems([]);
-      navigate(`/orders/${orderId}/`);
-    } catch (error) {
-      console.error("[Checkout] Order placement failed", error.response?.data || error.message);
-      toast.error(error.response?.data?.detail || "Failed to place order");
-    }
-  };
+        const res = await axiosInstance.post(endpoint, payload);
+
+        const orderId = res.data.order?.id || res.data.id;
+
+        if (paymentMethod === "Razorpay") {
+          const razorpayPayload = {
+            order_id: res.data.razorpay_order_id,
+            amount: res.data.amount,
+            currency: res.data.currency,
+            razorpay_key: res.data.razorpay_key,
+            orderId, // internal order ID
+          };
+
+          await handleRazorpayPayment(razorpayPayload);
+        }
+
+        toast.success("Order placed successfully");
+
+
+         // 🧹 Cart cleanup logic
+        if (!isBuyNowFlow && isAuthenticated) {
+            await refetchAuthCart(); // re-fetch cart from backend
+          }
+
+        if (!isBuyNowFlow && !isAuthenticated) {
+          localStorage.removeItem("cart");
+          setGuestCartItems([]);
+        }
+
+        if (isBuyNowFlow) {
+          sessionStorage.removeItem(BUY_NOW_KEY);
+          setBuyNowItems([]);
+        }
+
+        setPendingOrderId(null);
+        navigate(`/orders/${orderId}/`);
+      } catch (error) {
+        console.error("[Checkout] Order placement failed", error.response?.data || error.message);
+        toast.error(error.response?.data?.detail || "Failed to place order");
+      }
+    };
+
 
   if (loading || authLoading) return <p className="p-6">Loading cart...</p>;
 

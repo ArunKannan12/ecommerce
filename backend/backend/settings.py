@@ -282,7 +282,7 @@ CORS_ALLOWED_ORIGINS = [
 
 CSRF_COOKIE_NAME = 'csrftoken'
 CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
-
+SESSION_COOKIE_SECURE = True
 
 
 # Email settings for MailHog (local testing)
@@ -322,11 +322,12 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Razorpay credentials (test mode)
 RAZORPAY_KEY_ID = env('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
-
-
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
 
 
 CSRF_TRUSTED_ORIGINS = [
     "https://beston.netlify.app",
-    'http://localhost:3000'
+    "https://ecommerce-ml5v.onrender.com"
 ]
+

@@ -573,7 +573,10 @@ class BuyNowAPIView(APIView):
     def post(self, request):
         user = request.user
         items = request.data.get("items", [])
-        shipping_address_data = request.data.get("shipping_address")
+        shipping_address_data = (
+                request.data.get("shipping_address") or
+                request.data.get("shipping_address_id")
+            )
         payment_method = request.data.get("payment_method", "").strip().title()
         logger = logging.getLogger(__name__)
 
@@ -600,9 +603,9 @@ class BuyNowAPIView(APIView):
                 # Optional: deduplication check
                 existing = ShippingAddress.objects.filter(
                     user=user,
-                    pincode=shipping_address_data.get("pincode"),
+                    postal_code=shipping_address_data.get("postal_code"),
                     locality=shipping_address_data.get("locality"),
-                    address_line=shipping_address_data.get("address_line"),
+                    address=shipping_address_data.get("address"),
                     city=shipping_address_data.get("city"),
                     state=shipping_address_data.get("state")
                 ).first()

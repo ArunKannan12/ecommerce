@@ -82,40 +82,43 @@ const OrderDetail = () => {
       <div className="mb-6">
         <h2 className="text-xl font-semibold mb-3">Order Items</h2>
         <ul className="divide-y border rounded-lg overflow-hidden">
-          {
-          // console.log('orders items from ordr detail page',order),
-          
-          order.items.map((item, idx) => {
-            const variant = item.product_variant;
-            const quantity = item.quantity || 1;
-            const price = parseFloat(item.price || variant.price || 0);
-           const imageUrl =
-              variant.images?.[0]?.url ||
-              (typeof variant.product_images?.[0] === "string" ? variant.product_images[0] : null) ||
-              "/placeholder.png";
+          {order.items.map((item, idx) => {
+              const variant = item.product_variant;
+              const quantity = item.quantity || 1;
+              const price = parseFloat(item.price || variant.price || 0);
 
-            return (
-              <li
-                key={variant.id || `${item.id}-${idx}`}
-                className="flex justify-between items-center p-4 hover:bg-gray-50 transition"
-              >
-                <div className="flex items-center space-x-4">
-                  <img
-                    src={imageUrl}
-                    alt={variant.product_name}
-                    className="w-20 h-20 object-cover rounded-md shadow-sm"
-                  />
-                  <div>
-                    <p className="font-semibold text-gray-800">
-                      {variant.product_name} {variant.variant_name && `- ${variant.variant_name}`}
-                    </p>
-                    <p className="text-gray-500 text-sm">Qty: {quantity}</p>
+              const imageUrl =
+                variant.images?.[0]?.url ||
+                variant.product_images?.[0] ||
+                "/placeholder.png";
+              console.log(imageUrl);
+              
+              return (
+                <li
+                  key={variant.id || `${item.id}-${idx}`}
+                  className="flex justify-between items-center p-4 hover:bg-gray-50 transition"
+                >
+                  <div className="flex items-center space-x-4">
+                    <img
+                      src={imageUrl}
+                      alt={variant.product_name}
+                      className="w-20 h-20 object-cover rounded-md shadow-sm"
+                    />
+                    <div>
+                      <p className="font-semibold text-gray-800">
+                        {variant.product_name}
+                        {variant.variant_name && ` - ${variant.variant_name}`}
+                      </p>
+                      <p className="text-gray-500 text-sm">Qty: {quantity}</p>
+                    </div>
                   </div>
-                </div>
-                <p className="text-gray-800 font-medium">₹{(price * quantity).toFixed(2)}</p>
-              </li>
-            );
-          })}
+                  <p className="text-gray-800 font-medium">
+                    ₹{(price * quantity).toFixed(2)}
+                  </p>
+                </li>
+              );
+            })}
+
         </ul>
       </div>
 

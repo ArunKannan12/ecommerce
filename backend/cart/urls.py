@@ -15,6 +15,5 @@ urlpatterns = [
     path("cart/merge/", CartMergeAPIView.as_view(), name="cart-merge"),
     path('product-variants/bulk/', ProductVariantBulkAPIView.as_view(), name='product-variant-bulk'),
 
-    # Guest cart details endpoint
-    path('guest-cart/details/', GuestCartDetailsAPIView.as_view(), name='guest-cart-details'),
+    
 ]
