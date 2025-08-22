@@ -166,7 +166,10 @@ const Store = () => {
   <FeaturedShimmer />
 ) : products.length > 0 ? (
   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-    {products.map((product, i) => (
+    {
+    // console.log(products),
+    
+    products.map((product, i) => (
       <div
         key={product.id}
         style={{
@@ -183,9 +186,7 @@ const Store = () => {
           <div className="h-40 overflow-hidden">
             <img
               src={
-                product.images?.length > 0
-                  ? product.images[0].url  // ✅ use .url instead of .image
-                  : "/placeholder.png"     // ✅ fallback
+                product.image_url || product.image     // ✅ fallback
               }
               alt={product.images?.[0]?.alt_text || product.name}
               className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"

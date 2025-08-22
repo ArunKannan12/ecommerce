@@ -58,7 +58,10 @@ const Home = () => {
         <p className="text-gray-600">No featured products</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {featured.map((prod) => (
+          {
+          // console.log(featured),
+          
+          featured.map((prod) => (
             <Link
               key={prod.id}
               to={`/products/${prod.slug}`}
@@ -69,7 +72,7 @@ const Home = () => {
                 <img
                   className="object-cover w-full h-full"
                   src={
-                    prod.images?.[0]?.url ||
+                    prod.image_url ||prod.image ||
                     "https://cdn.pixabay.com/photo/2023/01/28/19/01/bird-7751561_1280.jpg"
                   }
                   alt={prod.name}

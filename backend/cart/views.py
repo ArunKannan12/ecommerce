@@ -180,7 +180,7 @@ class ProductVariantBulkAPIView(APIView):
         if not isinstance(variant_ids, list):
             return Response({"error": "variant_ids must be a list"}, status=400)
 
-        variants = ProductVariant.objects.filter(id__in=variant_ids).prefetch_related('images', 'product__images')
+        variants = ProductVariant.objects.filter(id__in=variant_ids).prefetch_related('images')
         serializer = ProductVariantSerializer(variants, many=True, context={'request': request})
         return Response(serializer.data)
 

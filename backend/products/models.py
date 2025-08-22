@@ -2,8 +2,8 @@ from django.db import models
 from django.utils.text import slugify
 from django.utils.crypto import get_random_string
 from rest_framework.exceptions import ValidationError
-from django.db.models.signals import post_save
-from django.dispatch import receiver
+import cloudinary.uploader
+
 
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -15,23 +15,18 @@ class Category(models.Model):
         verbose_name_plural = 'Categories'
 
     def save(self, *args, **kwargs):
-        # Generate slug if not exists
         if not self.slug:
             base_slug = slugify(self.name)
             slug = base_slug
             while Category.objects.filter(slug=slug).exists():
                 slug = f"{base_slug}-{get_random_string(4)}"
             self.slug = slug
-
-        # If image uploaded, override image_url with image file URL
-        if self.image:
+        if self.image and not self.image_url:
             self.image_url = self.image.url
-
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
-
 
 
 class Product(models.Model):
@@ -43,6 +38,10 @@ class Product(models.Model):
     is_available = models.BooleanField(default=True)
     featured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # MAIN product image
+    image = models.ImageField(upload_to='product_images/', blank=True, null=True)
+    image_url = models.URLField(blank=True, null=True)
 
     class Meta:
         indexes = [
@@ -58,7 +57,20 @@ class Product(models.Model):
             while Product.objects.filter(slug=slug).exists():
                 slug = f"{base_slug}-{get_random_string(4)}"
             self.slug = slug
+
+        # Cloudinary upload for product main image
         super().save(*args, **kwargs)
+        if self.image and (not self.image_url or 'res.cloudinary.com' not in self.image_url):
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    self.image.path,
+                    folder='ecommerce/product_main'
+                )
+                self.image_url = upload_result['secure_url']
+                self.image.delete(save=False)
+                super().save(update_fields=['image_url'])
+            except Exception as e:
+                print(f"Cloudinary upload failed: {e}")
 
     def __str__(self):
         return self.name
@@ -82,7 +94,7 @@ class ProductVariant(models.Model):
 
 
 class BaseImage(models.Model):
-    """Abstract base model for Product and Variant images"""
+    """Abstract base model for images (variant images only now)"""
     image = models.ImageField(upload_to='uploads/', blank=True, null=True)
     image_url = models.URLField(blank=True, null=True)
     alt_text = models.CharField(max_length=50, blank=True)
@@ -92,18 +104,25 @@ class BaseImage(models.Model):
 
     @property
     def url(self):
-        return self.image.url if self.image else self.image_url
+        return self.image_url or (self.image.url if self.image else None)
 
     def clean(self):
         if not self.image and not self.image_url:
             raise ValidationError("Either upload an image or provide an image URL.")
 
-
-class ProductImage(BaseImage):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
-
-    def __str__(self):
-        return f"Image for {self.product.name}"
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.image and (not self.image_url or 'res.cloudinary.com' not in self.image_url):
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    self.image.path,
+                    folder='ecommerce/variant_images'
+                )
+                self.image_url = upload_result['secure_url']
+                self.image.delete(save=False)
+                super().save(update_fields=['image_url'])
+            except Exception as e:
+                print(f"Cloudinary upload failed: {e}")
 
 
 class ProductVariantImage(BaseImage):
@@ -111,16 +130,3 @@ class ProductVariantImage(BaseImage):
 
     def __str__(self):
         return f"Image for {self.variant}"
-
-
-@receiver(post_save, sender=Product)
-def ensure_default_variant(sender, instance, created, **kwargs):
-    """Automatically create a default variant if none exist"""
-    if created and not instance.variants.exists():
-        ProductVariant.objects.create(
-            product=instance,
-            variant_name="Default",
-            sku=f"SKU-{instance.id}-DEF-{get_random_string(4)}",  # ✅ ensure uniqueness
-            stock=0,
-            additional_price=0
-        )

@@ -3,6 +3,7 @@ import axiosInstance from "../api/axiosinstance";
 import { useMergeGuestCartMutation } from "./cartSlice";
 import { syncGuestcart } from "../utils/syncGuestCart";
 import { toast } from "react-toastify";
+import { getCookie } from "../utils/getCookie";
 
 // Create context
 export const AuthContext = createContext({
@@ -65,20 +66,36 @@ export const AuthProvider = ({ children }) => {
         await axiosInstance.post("auth/jwt/create/", credentials);
       }
 
-      const user = await fetchProfile();
+      const user = await fetchProfile(); // fetch fresh profile from backend
 
-      if (!user?.is_active || !user?.is_verified) {
-        toast.info("Your account isn't verified yet. Please check your email.");
+      if (!user) {
+        // Login failed, no user returned
         setUser(null);
         setIsAuthenticated(false);
-        return {
-          success: false,
-          reason: "unverified",
-          email: credentials?.email,
-        };
+        return { success: false };
       }
 
-      // ✅ Merge guest cart (Buy Now + regular)
+      if (!user.is_active) {
+        // User is inactive (blocked)
+        toast.info("Your account is inactive. Contact support.");
+        setUser(null);
+        setIsAuthenticated(false);
+        return { success: false, reason: "inactive" };
+      }
+
+      if (!user.is_verified) {
+        // User is unverified
+        toast.info("Your account isn't verified yet. Please check your email.");
+        setUser(user);
+        setIsAuthenticated(false);
+        return { success: false, reason: "unverified", email: user.email };
+      }
+
+      // ✅ User is active and verified
+      setUser(user);
+      setIsAuthenticated(true);
+
+      // Merge guest cart if any
       const buyNowMinimal = JSON.parse(sessionStorage.getItem("buyNowMinimal") || "null");
       if (buyNowMinimal) {
         const itemsToMerge = Array.isArray(buyNowMinimal) ? buyNowMinimal : [buyNowMinimal];
@@ -90,17 +107,10 @@ export const AuthProvider = ({ children }) => {
         await syncGuestcart(mergeGuestCart, guestCart);
       }
 
-      setIsAuthenticated(true);
       return { success: true, from: redirectFrom };
     } catch (err) {
       console.error("Login failed", err);
-
-      const backendMessage =
-        err.response?.data?.detail ||
-        err.response?.data?.message ||
-        "❌ Login failed. Please check your credentials.";
-
-      toast.error(backendMessage);
+      toast.error("Login failed. Please check your credentials.");
       setUser(null);
       setIsAuthenticated(false);
       return { success: false, error: err };
@@ -108,6 +118,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
+
 
   // ✅ Logout
   const logout = async () => {

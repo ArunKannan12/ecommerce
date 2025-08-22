@@ -33,11 +33,14 @@ const Cart = () => {
       });
 
       const enriched = res.data.map((variant) => {
-        const localItem = localCart.find(
-          (i) => i.product_variant_id === variant.id
-        );
-        return { ...variant, quantity: localItem?.quantity || 1 };
-      });
+          const localItem = localCart.find(i => i.product_variant_id === variant.id);
+          return {
+            ...variant,
+            quantity: localItem?.quantity || 1,
+            
+          };
+});
+
 
       setGuestCartItems(enriched);
     } catch {
@@ -60,6 +63,8 @@ const Cart = () => {
   }, [isAuthenticated]);
 
   const cartItems = isAuthenticated ? authCartData || [] : guestCartItems;
+  console.log('catitems',cartItems);
+  
   const loading = isAuthenticated ? authLoading : false;
 
   const getImageUrl = (variant) => {
@@ -210,7 +215,7 @@ const Cart = () => {
                 {cartItems
                   .reduce((acc, item) => {
                     const variant = isAuthenticated
-                      ? item.product_variant_detail
+                      ? item.product_variant
                       : item;
                     return acc + (variant?.price || 0) * item.quantity;
                   }, 0)

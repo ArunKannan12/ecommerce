@@ -63,20 +63,21 @@ const LoginAndSignup = () => {
     }
 
     try {
-      setLoading(true);
-      const redirectFrom = location.state?.from || "/"; // ← preserve the intended page
-      const res = await login(loginData, null, redirectFrom); 
-      console.log('res',res);
-      
+        setLoading(true);
+        const redirectFrom = location.state?.from || "/"; 
+        const res = await login(loginData, null, redirectFrom); 
+        console.log("res", res);
 
-     if (res.success) {
+        if (res.success) {
           toast.success("Login successful");
           navigate(res.from, { replace: true });
         } else if (res.reason === "unverified") {
+          // Only go to verify page if truly unverified
           navigate("/verify-email", { state: { email: res.email } });
+        } else if (res.reason === "inactive") {
+          toast.info("Your account is inactive. Contact support.");
         }
-
-    } catch (err) {
+  } catch (err) {
       console.log('eer',err);
       
       const backendMessage =

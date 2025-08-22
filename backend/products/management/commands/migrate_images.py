@@ -6,16 +6,33 @@ class Command(BaseCommand):
     help = "Migrate local images to Cloudinary with organized folders"
 
     def handle(self, *args, **kwargs):
+        print("=== Migrate images command started ===")
+
         model_folder_map = {
             Category: "ecommerce/categories/",
             ProductImage: "ecommerce/products/",
             ProductVariantImage: "ecommerce/variants/",
         }
 
+        def is_cloudinary_url(url):
+            """Check if the URL is already a Cloudinary URL"""
+            if not url:
+                return False
+            return "res.cloudinary.com" in url
+
         for model, folder in model_folder_map.items():
-            for obj in model.objects.all():
-                if obj.image and not obj.image_url:  # migrate only if not already migrated
-                    self.stdout.write(self.style.WARNING(f"Uploading {obj.image.path} to {folder}..."))
+            objs = model.objects.all()
+            print(f"Processing {objs.count()} objects from {model.__name__}...")
+            migrated_count = 0
+            skipped_count = 0
+
+            for obj in objs:
+                # Only migrate if there is a local image and the URL is not on Cloudinary
+                if obj.image and not is_cloudinary_url(obj.image_url):
+                    print(f"[FOUND] {obj} -> {obj.image.path}")
+                    self.stdout.write(self.style.WARNING(
+                        f"Uploading {obj.image.path} to Cloudinary folder '{folder}'..."
+                    ))
 
                     try:
                         upload_result = cloudinary.uploader.upload(
@@ -23,8 +40,16 @@ class Command(BaseCommand):
                             folder=folder
                         )
                         obj.image_url = upload_result["secure_url"]
-                        obj.image.delete(save=False)  # remove local file ref
+                        obj.image.delete(save=False)
                         obj.save()
-                        self.stdout.write(self.style.SUCCESS(f"Uploaded -> {obj.image_url}"))
+                        migrated_count += 1
+                        self.stdout.write(self.style.SUCCESS(f"[UPLOADED] {obj.image_url}"))
                     except Exception as e:
-                        self.stdout.write(self.style.ERROR(f"Failed: {e}"))
+                        self.stdout.write(self.style.ERROR(f"[FAILED] {obj}: {e}"))
+                else:
+                    skipped_count += 1
+                    print(f"[SKIPPED] {obj} -> already migrated or no local image")
+
+            print(f"Finished {model.__name__}: Migrated {migrated_count}, Skipped {skipped_count}\n")
+
+        print("=== Migrate images command completed ===")

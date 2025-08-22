@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getCsrfToken } from "../utils/csrf";
+import { getCookie } from "../utils/getCookie";
 
 const axiosInstance = axios.create({
   // baseURL: "http://localhost:8000/api/",
@@ -36,6 +37,12 @@ axiosInstance.interceptors.response.use(
     ) {
       originalRequest._retry = true;
 
+      const refreshToken = getCookie('refresh')
+      if (!refreshToken) {
+        console.log("no  refrsh token ,user is not logged in .skipping refresh");
+        return Promise.reject(error)
+        
+      }
       try {
         await axiosInstance.post("auth/jwt/refresh/");
         return axiosInstance(originalRequest);
