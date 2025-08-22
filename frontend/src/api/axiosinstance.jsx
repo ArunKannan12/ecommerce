@@ -1,33 +1,47 @@
 import axios from "axios";
 import { getCsrfToken } from "../utils/csrf";
-import { getCookie } from "../utils/getCookie";
 
 const axiosInstance = axios.create({
-  // baseURL: "http://localhost:8000/api/",
-  baseURL:"https://ecommerce-ml5v.onrender.com/api",
-
-  withCredentials: true,
+  // baseURL:"http://localhost:8000/api/"
+  baseURL: "https://ecommerce-ml5v.onrender.com/api",
+  withCredentials: true, // ✅ send/receive cookies
   headers: {
     "Content-Type": "application/json",
-    "X-CSRFToken": getCsrfToken(),
   },
 });
 
-// Response interceptor
-axiosInstance.interceptors.request.use(config => {
-  const csrfToken = getCsrfToken(); // reads from document.cookie
-  if (csrfToken) {
-    config.headers["X-CSRFToken"] = csrfToken;
-  } else {
-    console.warn("⚠️ CSRF token not found in cookies");
-  }
-  return config;
-});
+// ⏳ Fetch CSRF cookie before first request if missing
+axiosInstance.interceptors.request.use(
+  async (config) => {
+    let csrfToken = getCsrfToken();
+
+    if (!csrfToken) {
+      try {
+        // hit backend to set csrftoken cookie
+        await axiosInstance.get("auth/csrf/", {
+          withCredentials: true,
+        });
+        csrfToken = getCsrfToken();
+      } catch (err) {
+        console.error("❌ Failed to fetch CSRF token:", err);
+      }
+    }
+
+    if (csrfToken) {
+      config.headers["X-CSRFToken"] = csrfToken;
+    } else {
+      console.warn("⚠️ CSRF token still missing");
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 // 🔄 Auto-refresh access token on 401
 axiosInstance.interceptors.response.use(
-  response => response,
-  async error => {
+  (response) => response,
+  async (error) => {
     const originalRequest = error.config;
 
     if (
@@ -37,12 +51,6 @@ axiosInstance.interceptors.response.use(
     ) {
       originalRequest._retry = true;
 
-      const refreshToken = getCookie('refresh')
-      if (!refreshToken) {
-        console.log("no  refrsh token ,user is not logged in .skipping refresh");
-        return Promise.reject(error)
-        
-      }
       try {
         await axiosInstance.post("auth/jwt/refresh/");
         return axiosInstance(originalRequest);

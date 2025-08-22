@@ -310,7 +310,6 @@ STATIC_URL = '/static/'
 
 
 CORS_ALLOW_CREDENTIALS = True
-CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = False
 CORS_ALLOWED_ORIGINS = [
     "https://beston.netlify.app",
@@ -318,7 +317,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CSRF_COOKIE_NAME = 'csrftoken'
-CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
+CSRF_HEADER_NAME = "X-CSRFToken"
 SESSION_COOKIE_SECURE = True
 
 
@@ -363,8 +362,9 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://beston.netlify.app",
-    "https://ecommerce-ml5v.onrender.com"
-]
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=[]
+)
+
 
