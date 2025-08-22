@@ -228,6 +228,25 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_SAMESITE': 'Lax',
 }
 
+if ENVIRONMENT == 'production':
+    SIMPLE_JWT['AUTH_COOKIE_SECURE'] = True      # only send over HTTPS
+    SIMPLE_JWT['AUTH_COOKIE_SAMESITE'] = 'None'  # allow cross-site requests
+else:
+    SIMPLE_JWT['AUTH_COOKIE_SECURE'] = False
+    SIMPLE_JWT['AUTH_COOKIE_SAMESITE'] = 'Lax'
+
+if ENVIRONMENT == 'production':
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_SAMESITE = 'None'
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = 'None'
+else:
+    CSRF_COOKIE_SECURE = False
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_SAMESITE = 'Lax'
+
+
 DJOSER = {
     'LOGIN_FIELD': 'email',
     "EMAIL_FRONTEND_SITE_NAME": 'auth',

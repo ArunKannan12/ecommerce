@@ -216,25 +216,53 @@ const ProductDetail = () => {
 
       {/* Related Products */}
       {relatedProducts.length > 0 && (
-        <div className="mt-10">
-          <h2 className="text-lg font-bold mb-4">Related Products</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {relatedProducts.map((rp) => (
-              <div key={rp.id} className="border p-2 rounded-lg shadow hover:shadow-lg transition cursor-pointer" onClick={() => navigate(`/products/${rp.slug}`)}>
-                <div className="w-full h-40 flex items-center justify-center bg-gray-100 overflow-hidden rounded">
-                  {rp.images?.[0]?.url ? (
-                    <img src={rp.images[0].url} alt={rp.name} className="max-w-full max-h-full object-contain" />
-                  ) : (
-                    <div className="text-gray-400 text-center w-full">No Image</div>
-                  )}
+          <div className="mt-10">
+            <h2 className="text-lg font-bold mb-4">Related Products</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {relatedProducts.map((rp) => (
+                <div
+                  key={rp.id}
+                  className="border p-2 rounded-lg shadow hover:shadow-lg transition cursor-pointer"
+                  onClick={() => navigate(`/products/${rp.slug}`)}
+                >
+                  {/* Main Product Image */}
+                  <div className="w-full h-40 flex items-center justify-center bg-gray-100 overflow-hidden rounded">
+                    {rp.image_url ? (
+                      <img
+                        src={rp.image_url}
+                        alt={rp.name}
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    ) : (
+                      <div className="text-gray-400 text-center w-full">No Image</div>
+                    )}
+                  </div>
+
+                  {/* Product Info */}
+                  <h3 className="mt-2 font-semibold">{rp.name}</h3>
+                  <p className="text-green-700">₹{rp.price}</p>
+
+                  {/* Variant Images */}
+                  {rp.variants?.map((variant) => (
+                    <div key={variant.id} className="mt-2">
+                      <p className="text-sm font-medium text-gray-600">{variant.variant_name}</p>
+                      <div className="flex gap-2 overflow-x-auto">
+                        {variant.images?.map((img) => (
+                          <img
+                            key={img.id}
+                            src={img.url}
+                            alt={img.alt_text || variant.variant_name}
+                            className="w-16 h-16 object-cover rounded border"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <h3 className="mt-2 font-semibold">{rp.name}</h3>
-                <p className="text-green-700">₹{rp.price}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 };
