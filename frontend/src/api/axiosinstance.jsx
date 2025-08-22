@@ -1,26 +1,25 @@
 import axios from "axios";
 import { getCsrfToken } from "../utils/csrf";
 
+const BASE_URL = "https://ecommerce-ml5v.onrender.com/api";
+
 const axiosInstance = axios.create({
-  // baseURL:"http://localhost:8000/api/"
-  baseURL: "https://ecommerce-ml5v.onrender.com/api",
-  withCredentials: true, // ✅ send/receive cookies
+  baseURL: BASE_URL,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// ⏳ Fetch CSRF cookie before first request if missing
+// ⏳ Request interceptor
 axiosInstance.interceptors.request.use(
   async (config) => {
     let csrfToken = getCsrfToken();
 
     if (!csrfToken) {
       try {
-        // hit backend to set csrftoken cookie
-        await axiosInstance.get("auth/csrf/", {
-          withCredentials: true,
-        });
+        // ✅ raw axios to avoid recursion
+        await axios.get(`${BASE_URL}/auth/csrf/`, { withCredentials: true });
         csrfToken = getCsrfToken();
       } catch (err) {
         console.error("❌ Failed to fetch CSRF token:", err);
@@ -29,8 +28,6 @@ axiosInstance.interceptors.request.use(
 
     if (csrfToken) {
       config.headers["X-CSRFToken"] = csrfToken;
-    } else {
-      console.warn("⚠️ CSRF token still missing");
     }
 
     return config;
@@ -38,7 +35,7 @@ axiosInstance.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// 🔄 Auto-refresh access token on 401
+// 🔄 Response interceptor (auto-refresh JWT)
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -52,7 +49,10 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        await axiosInstance.post("auth/jwt/refresh/");
+        // ✅ raw axios for refresh
+        await axios.post(`${BASE_URL}/auth/jwt/refresh/`, {}, { withCredentials: true });
+
+        // retry original request with instance
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         console.error("🔒 Token refresh failed:", refreshError);
