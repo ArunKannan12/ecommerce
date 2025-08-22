@@ -3,8 +3,8 @@ import { getCsrfToken } from "../utils/csrf";
 import { getCookie } from "../utils/getCookie";
 
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:8000/api/",
-  // baseURL:"https://ecommerce-ml5v.onrender.com/api",
+  // baseURL: "http://localhost:8000/api/",
+  baseURL:"https://ecommerce-ml5v.onrender.com/api",
 
   withCredentials: true,
   headers: {
