@@ -63,7 +63,7 @@ const OrderList = () => {
           });
 
           // Total amount = sum(price * quantity)
-          const totalAmount = items.reduce((sum, item) => sum + parseFloat(item.price) * item.quantity, 0);
+          const totalAmount = parseFloat(order.total);
 
           return (
             <li key={order.id} className="bg-white shadow-sm rounded-lg p-4 flex justify-between items-center hover:shadow-md transition">

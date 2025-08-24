@@ -551,3 +551,17 @@ class SetCSRFCookieView(APIView):
 
     def get(self, request):
         return Response({'detail': 'CSRF cookie set'})
+    
+from django.http import JsonResponse
+
+def custom_jwt_view(request):
+    access_token = request.COOKIES.get('access_token')
+    refresh_token = request.COOKIES.get('refresh_token')
+    
+    print("Access token:", access_token)
+    print("Refresh token:", refresh_token)
+    
+    return JsonResponse({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+    })

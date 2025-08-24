@@ -4,9 +4,7 @@ import axiosInstance from '../../api/axiosinstance';
 import { toast } from 'react-toastify';
 import ProductDetailShimmer from '../../shimmer/ProductDetailShimmer';
 import { useAddToCartMutation, useGetCartQuery } from '../../contexts/cartSlice';
-import { syncGuestcart } from '../../utils/syncGuestCart';
 import { useAuth } from '../../contexts/authContext';
-
 
 const ProductDetail = () => {
   const { productSlug } = useParams();
@@ -63,7 +61,7 @@ const ProductDetail = () => {
     const index = cart.findIndex(item => item.product_variant_id === variantId);
 
     if (index > -1) cart[index].quantity += quantity;
-    else cart.push({ product_variant_id: variantId, quantity,source:"add_to_cart" });
+    else cart.push({ product_variant_id: variantId, quantity, source: "add_to_cart" });
 
     localStorage.setItem("cart", JSON.stringify(cart));
     window.dispatchEvent(new Event("cartUpdated"));
@@ -107,7 +105,7 @@ const ProductDetail = () => {
     } else {
       navigate("/checkout");
     }
-};
+  };
 
   if (loading || !product) return <ProductDetailShimmer />;
 
@@ -115,6 +113,14 @@ const ProductDetail = () => {
     selectedVariant?.images?.length > 0
       ? selectedVariant.images.map(img => img?.url || img?.image || img?.image_url)
       : product?.images?.map(img => img?.url || img?.image || img?.image_url) || [];
+
+  // 🟢 Price & discount logic
+  const basePrice = Number(selectedVariant?.base_price || 0);
+  const finalPrice = Number(selectedVariant?.final_price || basePrice);
+  const discount =
+    basePrice > 0 && finalPrice < basePrice
+      ? Math.round(((basePrice - finalPrice) / basePrice) * 100)
+      : 0;
 
   return (
     <div className="p-6">
@@ -161,11 +167,20 @@ const ProductDetail = () => {
           <p className="text-sm text-gray-500">
             Category: <span className="font-medium">{product.category?.name}</span>
           </p>
-          <p className="text-xl font-semibold text-green-700">
-            ₹{selectedVariant
-              ? Number(selectedVariant?.additional_price || 0) + Number(product?.price || 0)
-              : product?.price}
-          </p>
+
+          {/* 🟢 Show Price + Discount */}
+          <div className="flex items-center gap-3">
+            <p className="text-2xl font-bold text-green-700">₹{finalPrice}</p>
+            {discount > 0 && (
+              <>
+                <p className="text-lg text-gray-500 line-through">₹{basePrice}</p>
+                <span className="bg-red-100 text-red-600 text-sm font-semibold px-2 py-1 rounded-md">
+                  {discount}% OFF
+                </span>
+              </>
+            )}
+          </div>
+
           <p className="text-gray-700">{product.description}</p>
 
           {/* Variant selector */}
@@ -192,7 +207,7 @@ const ProductDetail = () => {
             </div>
           )}
 
-          <p className="text-sm text-gray-600">Stock: {selectedVariant?.stock ?? product?.stock ?? 'N/A'}</p>
+          <p className="text-sm text-gray-600">Stock: {selectedVariant?.stock ?? 'N/A'}</p>
           <p className="text-sm text-gray-600">SKU: {selectedVariant?.sku ?? 'N/A'}</p>
 
           {/* Quantity controls */}
@@ -216,53 +231,78 @@ const ProductDetail = () => {
 
       {/* Related Products */}
       {relatedProducts.length > 0 && (
-          <div className="mt-10">
-            <h2 className="text-lg font-bold mb-4">Related Products</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {relatedProducts.map((rp) => (
-                <div
-                  key={rp.id}
-                  className="border p-2 rounded-lg shadow hover:shadow-lg transition cursor-pointer"
-                  onClick={() => navigate(`/products/${rp.slug}`)}
-                >
-                  {/* Main Product Image */}
-                  <div className="w-full h-40 flex items-center justify-center bg-gray-100 overflow-hidden rounded">
-                    {rp.image_url ? (
-                      <img
-                        src={rp.image_url}
-                        alt={rp.name}
-                        className="max-w-full max-h-full object-contain"
-                      />
-                    ) : (
-                      <div className="text-gray-400 text-center w-full">No Image</div>
-                    )}
-                  </div>
+  <div className="mt-12">
+    <h2 className="text-2xl font-bold mb-6 text-gray-800">Related Products</h2>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+      {relatedProducts.map((rp) => {
+        // take the lowest prices among variants
+        const minBasePrice = rp.variants?.length
+          ? Math.min(...rp.variants.map(v => parseFloat(v.base_price)))
+          : null;
 
-                  {/* Product Info */}
-                  <h3 className="mt-2 font-semibold">{rp.name}</h3>
-                  <p className="text-green-700">₹{rp.price}</p>
+        const minOfferPrice = rp.variants?.length
+          ? Math.min(...rp.variants.map(v => parseFloat(v.final_price)))
+          : null;
 
-                  {/* Variant Images */}
-                  {rp.variants?.map((variant) => (
-                    <div key={variant.id} className="mt-2">
-                      <p className="text-sm font-medium text-gray-600">{variant.variant_name}</p>
-                      <div className="flex gap-2 overflow-x-auto">
-                        {variant.images?.map((img) => (
-                          <img
-                            key={img.id}
-                            src={img.url}
-                            alt={img.alt_text || variant.variant_name}
-                            className="w-16 h-16 object-cover rounded border"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+        const discount =
+          minBasePrice && minOfferPrice
+            ? Math.round(((minBasePrice - minOfferPrice) / minBasePrice) * 100)
+            : 0;
+
+        return (
+          <div
+            key={rp.id}
+            className="group relative bg-white border rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
+            onClick={() => navigate(`/products/${rp.slug}`)}
+          >
+            {/* Image */}
+            <div className="w-full h-48 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+              {rp.image_url ? (
+                <img
+                  src={rp.image_url}
+                  alt={rp.name}
+                  className="max-w-full max-h-full object-contain transform group-hover:scale-105 transition-transform duration-300"
+                />
+              ) : (
+                <div className="text-gray-400 text-center w-full">No Image</div>
+              )}
+            </div>
+
+            {/* Details */}
+            <div className="p-4">
+              <h3 className="text-base font-semibold text-gray-800 group-hover:text-indigo-600 line-clamp-1">
+                {rp.name}
+              </h3>
+
+              {minOfferPrice !== null && (
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="text-lg font-bold text-green-700">₹{minOfferPrice}</p>
+                  {minBasePrice && minBasePrice > minOfferPrice && (
+                    <>
+                      <p className="text-sm text-gray-500 line-through">₹{minBasePrice}</p>
+                      <span className="text-sm font-medium text-red-600">
+                        {discount}% OFF
+                      </span>
+                    </>
+                  )}
                 </div>
-              ))}
+              )}
+            </div>
+
+            {/* Hover Badge */}
+            <div className="absolute top-3 right-3">
+              <span className="bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition duration-300">
+                View
+              </span>
             </div>
           </div>
-        )}
+        );
+      })}
+    </div>
+  </div>
+)}
+
+
     </div>
   );
 };

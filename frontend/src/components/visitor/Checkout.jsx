@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import axiosInstance from "../../api/axiosinstance";
 import { useGetCartQuery } from "../../contexts/cartSlice";
@@ -9,26 +9,34 @@ import PaymentMethodSelector from "./PaymentMethodSelector";
 import CheckoutSummary from "./CheckoutSummary";
 import { handleRazorpayPayment } from "../../utils/payment";
 import { useAuth } from "../../contexts/authContext";
-import {useDispatch } from 'react-redux'
 
 const BUY_NOW_KEY = "buyNowMinimal";
 
 const Checkout = () => {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const dispatch = useDispatch();
+
   const [buyNowItems, setBuyNowItems] = useState([]);
   const [guestCartItems, setGuestCartItems] = useState([]);
+  const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState("");
   const [pendingOrderId, setPendingOrderId] = useState(null);
   const [selectedAddress, setSelectedAddress] = useState(null);
 
+  const [orderPreview, setOrderPreview] = useState({
+    subtotal: 0,
+    delivery_charge: 0,
+    total: 0,
+  });
+
   const { data: authCartData, refetch: refetchAuthCart } = useGetCartQuery(undefined, {
     skip: !isAuthenticated,
   });
 
+  /** ------------------------
+   *  LOAD BUY NOW ITEMS
+   * ------------------------ */
   useEffect(() => {
     const enrichBuyNowItems = async () => {
       const stored = sessionStorage.getItem(BUY_NOW_KEY);
@@ -61,6 +69,9 @@ const Checkout = () => {
     enrichBuyNowItems();
   }, []);
 
+  /** ------------------------
+   *  LOAD GUEST CART
+   * ------------------------ */
   useEffect(() => {
     const loadGuestCart = async () => {
       if (!isAuthenticated && !buyNowItems.length) {
@@ -98,146 +109,177 @@ const Checkout = () => {
     };
 
     setLoading(true);
-    if (isAuthenticated) refetchAuthCart().finally(() => setLoading(false));
-    loadGuestCart().finally(() => setLoading(false));
+    if (isAuthenticated) {
+      refetchAuthCart().finally(() => setLoading(false));
+    } else {
+      loadGuestCart().finally(() => setLoading(false));
+    }
   }, [isAuthenticated, refetchAuthCart, buyNowItems.length]);
 
-  const getVariantImage = (item) => {
-    if (item.variant?.images?.length) return item.variant.images[0].url || "/placeholder.png";
-    if (item.product?.images?.length) return item.product.images[0].url || "/placeholder.png";
-    return item.imageUrl || "/placeholder.png";
-  };
+  /** ------------------------
+   *  COMPUTE CART ITEMS
+   * ------------------------ */
+  useEffect(() => {
+    const getVariantImage = (item) => {
+      if (item.variant?.images?.length) return item.variant.images[0].url || "/placeholder.png";
+      if (item.images?.length) return item.images[0].url || "/placeholder.png";
+      if (item.product?.images?.length) return item.product.images[0].url || "/placeholder.png";
+      return item.imageUrl || "/placeholder.png";
+    };
 
-  const cartItems = buyNowItems.length
-    ? buyNowItems.map((item) => ({ ...item, imageUrl: getVariantImage(item) }))
-    : isAuthenticated && authCartData?.length
-    ? authCartData.map((item) => ({
-        id: item.product_variant_detail?.id || item.id,
-        productName: item.product_variant_detail?.product_name || "Product",
-        variantName: item.product_variant_detail?.variant_name || "",
+    let items = [];
+
+    if (buyNowItems.length) {
+      items = buyNowItems.map((item) => ({
+        id: item.variant?.id || item.product_variant_id || item.id,
+        product_variant_id: item.variant?.id || item.product_variant_id || item.id,
+        productName: item.productName || item.product?.name || "Product",
+        variantName: item.variantName || item.variant?.variant_name || "",
         quantity: item.quantity || 1,
-        price:
-          item.price ??
-          (Number(item.product_variant_detail?.product_base_price ?? 0) +
-            Number(item.product_variant_detail?.additional_price ?? 0)),
-        imageUrl: getVariantImage({
-          variant: item.product_variant_detail,
-          product: item.product,
-          imageUrl: item.imageUrl,
-        }),
-        product_variant_id: item.product_variant_detail?.id,
-      }))
-    : guestCartItems.map((item) => ({ ...item, imageUrl: getVariantImage(item) }));
+        price: item.price,
+        imageUrl: getVariantImage(item),
+      }));
+    } else if (isAuthenticated && authCartData?.length) {
+      items = authCartData.map((item) => ({
+        id: item.variant_id || item.id,
+        product_variant_id: item.variant_id || item.id,
+        productName: item.product_name || "Product",
+        variantName: item.variant_name || "",
+        quantity: item.quantity || 1,
+        price: Number(item.final_price ?? item.offer_price ?? item.base_price ?? 0),
+        imageUrl: getVariantImage(item),
+      }));
+    } else {
+      items = guestCartItems.map((item) => ({
+        id: item.variant?.id || item.product_variant_id || item.id,
+        product_variant_id: item.variant?.id || item.product_variant_id || item.id,
+        productName: item.productName || item.product?.name || "Product",
+        variantName: item.variantName || item.variant?.variant_name || "",
+        quantity: item.quantity || 1,
+        price: item.price,
+        imageUrl: getVariantImage(item),
+      }));
+    }
 
-  const totalAmount = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+    setCartItems(items);
+  }, [buyNowItems, authCartData, guestCartItems, isAuthenticated]);
 
-  const buildItemsPayload = (items) =>
-    items.map((item) => ({
-      product_variant_id: item.product_variant_id,
-      quantity: item.quantity,
-    }));
-
-  const handlePlaceOrder = async () => {
-      const isBuyNowFlow = buyNowItems?.length > 0;
-      const itemsToUse = isBuyNowFlow ? buyNowItems : cartItems;
-
-      if (!itemsToUse.length) {
-        toast.error("Your cart is empty");
-        return;
-      }
-
-      if (!selectedAddress) {
-        toast.error("Please select a shipping address");
-        return;
-      }
-
-      if (!paymentMethod) {
-        toast.error("Please select a payment method");
-        return;
-      }
-
-      const {
-        full_name,
-        phone_number,
-        address,
-        city,
-        postal_code,
-        country,
-        locality,
-        district,
-        state,
-        region,
-      } = selectedAddress;
-
-      const cleanAddress = {
-        full_name,
-        phone_number,
-        address,
-        city,
-        postal_code,
-        country,
-        locality: locality || "",
-        district: district || "",
-        state,
-        region: region || "",
-      };
-
-      const itemsPayload = buildItemsPayload(itemsToUse);
+  /** ------------------------
+   *  ORDER PREVIEW FETCH
+   * ------------------------ */
+  useEffect(() => {
+    const fetchPreview = async () => {
+      if (!cartItems.length || !selectedAddress?.postal_code) return;
 
       try {
-        const endpoint = isBuyNowFlow ? "checkout/buy-now/" : "checkout/cart/";
         const payload = {
-            items: itemsPayload,
-            payment_method: paymentMethod,
-            ...(selectedAddress.id
-              ? { shipping_address_id: selectedAddress.id }
-              : { shipping_address: cleanAddress }),
-          };
+          items: cartItems.map((item) => ({
+            product_variant_id: item.id,
+            quantity: item.quantity,
+          })),
+          postal_code: selectedAddress.postal_code,
+        };
 
-
-        const res = await axiosInstance.post(endpoint, payload);
-
-        const orderId = res.data.order?.id || res.data.id;
-
-        if (paymentMethod === "Razorpay") {
-          const razorpayPayload = {
-            order_id: res.data.razorpay_order_id,
-            amount: res.data.amount,
-            currency: res.data.currency,
-            razorpay_key: res.data.razorpay_key,
-            orderId, // internal order ID
-          };
-
-          await handleRazorpayPayment(razorpayPayload);
-        }
-
-        toast.success("Order placed successfully");
-
-
-         // 🧹 Cart cleanup logic
-        if (!isBuyNowFlow && isAuthenticated) {
-            await refetchAuthCart(); // re-fetch cart from backend
-          }
-
-        if (!isBuyNowFlow && !isAuthenticated) {
-          localStorage.removeItem("cart");
-          setGuestCartItems([]);
-        }
-
-        if (isBuyNowFlow) {
-          sessionStorage.removeItem(BUY_NOW_KEY);
-          setBuyNowItems([]);
-        }
-
-        setPendingOrderId(null);
-        navigate(`/orders/${orderId}/`);
+        const res = await axiosInstance.post("checkout/preview/", payload);
+        setOrderPreview(res.data);
       } catch (error) {
-        console.error("[Checkout] Order placement failed", error.response?.data || error.message);
-        toast.error(error.response?.data?.detail || "Failed to place order");
+        console.error("[Checkout] Preview failed", error.response?.data || error.message);
+        toast.error(error.response?.data?.detail || "Failed to fetch order preview");
       }
     };
 
+    fetchPreview();
+  }, [cartItems, selectedAddress]);
 
+  /** ------------------------
+   *  PLACE ORDER
+   * ------------------------ */
+  const handlePlaceOrder = async () => {
+    const isBuyNowFlow = buyNowItems?.length > 0;
+    const itemsToUse = isBuyNowFlow ? buyNowItems : cartItems;
+
+    if (!itemsToUse.length) return toast.error("Your cart is empty");
+    if (!selectedAddress) return toast.error("Please select a shipping address");
+    if (!paymentMethod) return toast.error("Please select a payment method");
+
+    const {
+      full_name,
+      phone_number,
+      address,
+      city,
+      postal_code,
+      country,
+      locality,
+      district,
+      state,
+      region,
+    } = selectedAddress;
+
+    const cleanAddress = {
+      full_name,
+      phone_number,
+      address,
+      city,
+      postal_code,
+      country,
+      locality: locality || "",
+      district,
+      state,
+      region,
+    };
+
+    try {
+      const endpoint = isBuyNowFlow ? "checkout/buy-now/" : "checkout/cart/";
+      const payload = {
+        items: itemsToUse.map((i) => ({
+          product_variant_id: i.product_variant_id,
+          quantity: i.quantity,
+        })),
+        payment_method: paymentMethod,
+        ...(selectedAddress.id
+          ? { shipping_address_id: selectedAddress.id }
+          : { shipping_address: cleanAddress }),
+      };
+
+      const res = await axiosInstance.post(endpoint, payload);
+      const orderId = res.data.order?.id || res.data.id;
+
+      if (paymentMethod === "Razorpay") {
+        await handleRazorpayPayment({
+          order_id: res.data.razorpay_order_id,
+          amount: res.data.amount,
+          currency: res.data.currency,
+          razorpay_key: res.data.razorpay_key,
+          orderId,
+        });
+      }
+
+      toast.success("Order placed successfully");
+
+      // cleanup
+      if (!isBuyNowFlow && isAuthenticated) {
+        await refetchAuthCart();
+      }
+      if (!isBuyNowFlow && !isAuthenticated) {
+        localStorage.removeItem("cart");
+        setGuestCartItems([]);
+      }
+      if (isBuyNowFlow) {
+        sessionStorage.removeItem(BUY_NOW_KEY);
+        setBuyNowItems([]);
+      }
+
+      setPendingOrderId(null);
+      navigate(`/orders/${orderId}/`);
+    } catch (error) {
+      console.error("[Checkout] Order placement failed", error.response?.data || error.message);
+      toast.error(error.response?.data?.detail || "Failed to place order");
+    }
+  };
+
+  /** ------------------------
+   *  RENDER
+   * ------------------------ */
   if (loading || authLoading) return <p className="p-6">Loading cart...</p>;
 
   return (
@@ -252,8 +294,16 @@ const Checkout = () => {
             selectedAddress={selectedAddress}
             setSelectedAddress={setSelectedAddress}
           />
-          <PaymentMethodSelector paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} />
-          <CheckoutSummary totalAmount={totalAmount} onPlaceOrder={handlePlaceOrder} />
+          <PaymentMethodSelector
+            paymentMethod={paymentMethod}
+            setPaymentMethod={setPaymentMethod}
+          />
+          <CheckoutSummary
+            subtotal={orderPreview.subtotal}
+            deliveryCharge={orderPreview.delivery_charge}
+            totalAmount={orderPreview.total}
+            onPlaceOrder={handlePlaceOrder}
+          />
         </>
       )}
     </div>

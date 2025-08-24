@@ -30,7 +30,7 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['featured', 'is_available']
     search_fields = ['name', 'description', 'slug']
-    ordering_fields = ['created_at', 'price', 'name']
+    ordering_fields = ['created_at', 'name']
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -68,7 +68,7 @@ class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = ProductVariantSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['variant_name', 'sku']
-    ordering_fields = ['additional_price', 'stock']
+    ordering_fields = ['base_price','offer_price', 'stock']
 
     def get_permissions(self):
         if self.request.method == 'POST':

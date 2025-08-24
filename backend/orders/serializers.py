@@ -1,19 +1,10 @@
-from .models import Order,OrderItem,ShippingAddress
+from .models import Order, OrderItem, ShippingAddress
 from rest_framework import serializers
 from products.serializers import ProductVariantSerializer
 from products.models import ProductVariant
 from promoter.serializers import PromoterSerializer
 from rest_framework.validators import UniqueTogetherValidator
 from promoter.models import Promoter
-from .utils import get_pincode_details
-
-
-DUMMY_LOCALITY_CHOICES = [
-    ("Gudalur", "Gudalur"),
-    ("Ooty", "Ooty"),
-   
-]
-
 
 
 class ShippingAddressSerializer(serializers.ModelSerializer):
@@ -29,7 +20,7 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
             UniqueTogetherValidator(
                 queryset=ShippingAddress.objects.all(),
                 fields=[
-                     'full_name', 'phone_number',
+                    'full_name', 'phone_number',
                     'address', 'locality', 'city', 'postal_code', 'country'
                 ],
                 message="This address already exists for the user."
@@ -37,8 +28,6 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
         ]
 
 
-    
-    
 class OrderSerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSerializer(required=False)
     shipping_address_id = serializers.PrimaryKeyRelatedField(
@@ -56,7 +45,8 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'shipping_address', 'shipping_address_id',
-            'status', 'total', 'payment_method', 'is_paid', 'is_refunded',
+            'status', 'subtotal', 'delivery_charge', 'total',
+            'payment_method', 'is_paid', 'is_refunded',
             'tracking_number', 'shipped_at', 'delivered_at', 'paid_at',
             'created_at', 'updated_at', 'promoter', 'promoter_id',
             'cancel_reason', 'cancelled_at', 'cancelled_by', 'cancelled_by_role',
@@ -65,32 +55,36 @@ class OrderSerializer(serializers.ModelSerializer):
             'is_restocked', 'cancelable'
         ]
         read_only_fields = [
-            'status', 'is_paid', 'is_refunded', 'tracking_number', 'shipped_at',
-            'delivered_at', 'paid_at', 'created_at', 'updated_at',
+            'status', 'subtotal', 'delivery_charge', 'total',
+            'is_paid', 'is_refunded', 'tracking_number',
+            'shipped_at', 'delivered_at', 'paid_at',
+            'created_at', 'updated_at',
             'cancelled_by', 'cancelled_by_role', 'is_restocked'
         ]
 
     def get_cancelable(self, obj):
         return obj.status in ['pending', 'processing'] and obj.status != 'cancelled'
 
+
 class OrderItemSerializer(serializers.ModelSerializer):
-    order=OrderSerializer(read_only=True)
-    order_id=serializers.PrimaryKeyRelatedField(queryset=Order.objects.all(),write_only=True)
-    product_variant=ProductVariantSerializer(read_only=True)
-    product_variant_id=serializers.PrimaryKeyRelatedField(queryset=ProductVariant.objects.all(),write_only=True)
+    order = OrderSerializer(read_only=True)
+    order_id = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all(), write_only=True)
+    product_variant = ProductVariantSerializer(read_only=True)
+    product_variant_id = serializers.PrimaryKeyRelatedField(queryset=ProductVariant.objects.all(), write_only=True)
 
     class Meta:
-        model=OrderItem
+        model = OrderItem
         fields = [
             'id', 'order', 'order_id', 'product_variant', 'product_variant_id',
             'quantity', 'price', 'status', 'packed_at', 'shipped_at'
         ]
-        
+
+
 class ShippingAddressInputSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=100)
     phone_number = serializers.CharField(max_length=20)
     address = serializers.CharField()
-    locality = serializers.ChoiceField(choices=DUMMY_LOCALITY_CHOICES, required=True)
+    locality = serializers.CharField(max_length=100)  # frontend provides locality options
     city = serializers.CharField(max_length=50)
     district = serializers.CharField(max_length=50, required=False, allow_blank=True)
     state = serializers.CharField(max_length=50)
@@ -98,19 +92,6 @@ class ShippingAddressInputSerializer(serializers.Serializer):
     postal_code = serializers.CharField(max_length=20)
     country = serializers.CharField(max_length=50)
 
-    
-    def validate(self, data):
-        pincode = data.get('postal_code')
-        if pincode:
-            details = get_pincode_details(pincode)
-
-            # Enrich data with autofill values
-            if details.get('state'):
-                data['state'] = details['state']
-            if details.get('district'):
-                data['district'] = details['district']
-
-        return data
 
 class ShippingAddressSummarySerializer(serializers.ModelSerializer):
     class Meta:
@@ -118,25 +99,14 @@ class ShippingAddressSummarySerializer(serializers.ModelSerializer):
         fields = [
             "full_name", "phone_number", "address",
             "locality", "city", "district", "state",
-            "postal_code", "country",'created_at'
+            "postal_code", "country", 'created_at'
         ]
+
 
 class CartCheckoutInputSerializer(serializers.Serializer):
     shipping_address_id = serializers.IntegerField(required=False)
     shipping_address = ShippingAddressInputSerializer(required=False)
     payment_method = serializers.ChoiceField(choices=['Cash on Delivery', 'Razorpay'])
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        shipping_data = self.initial_data.get('shipping_address') if hasattr(self, 'initial_data') else None
-        if shipping_data:
-            pincode = shipping_data.get('postal_code')
-            if pincode:
-                try:
-                    details = get_pincode_details(pincode)
-                    self.fields['shipping_address'].fields['locality'].choices = details.get('localities', [])
-                except Exception:
-                    self.fields['shipping_address'].fields['locality'].choices = []
 
     def validate(self, data):
         has_id = data.get('shipping_address_id')
@@ -168,10 +138,12 @@ class CartCheckoutInputSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"shipping_address": nested_serializer.errors})
 
         return data
-    
+
+
 class CheckoutItemInputSerializer(serializers.Serializer):
     product_variant_id = serializers.IntegerField(required=True)
     quantity = serializers.IntegerField(required=True, min_value=1)
+
 
 class ReferralCheckoutInputSerializer(CartCheckoutInputSerializer):
     items = CheckoutItemInputSerializer(many=True, required=True)
@@ -180,8 +152,8 @@ class ReferralCheckoutInputSerializer(CartCheckoutInputSerializer):
         if not value:
             raise serializers.ValidationError("This field cannot be empty.")
         return value
-    
-    
+
+
 class OrderItemStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=['picked', 'packed', 'shipped'])
 
@@ -189,7 +161,6 @@ class OrderItemStatusUpdateSerializer(serializers.Serializer):
         if value not in ['picked', 'packed', 'shipped']:
             raise serializers.ValidationError("Invalid status update.")
         return value
-
 
 
 class OrderPaymentSerializer(serializers.Serializer):
@@ -216,14 +187,16 @@ class OrderPaymentSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Razorpay payment details are required.")
 
         attrs['order'] = order
-        return attrs 
-    
+        return attrs
+
+
 class OrderItemSimpleSerializer(serializers.ModelSerializer):
     product_variant = ProductVariantSerializer(read_only=True)
 
     class Meta:
         model = OrderItem
         fields = ['id', 'product_variant', 'quantity', 'price', 'status']
+
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSerializer(read_only=True)
@@ -235,7 +208,9 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'id', 'shipping_address', 'status', 'total', 'payment_method', 'is_paid', 'is_refunded',
+            'id', 'shipping_address', 'status',
+            'subtotal', 'delivery_charge', 'total',
+            'payment_method', 'is_paid', 'is_refunded',
             'tracking_number', 'shipped_at', 'delivered_at', 'paid_at',
             'created_at', 'updated_at', 'promoter', 'items',
             'cancel_reason', 'cancelled_at', 'cancelled_by',
@@ -247,6 +222,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     def get_cancelable(self, obj):
         return obj.status in ['pending', 'processing'] and obj.status != 'cancelled'
 
+
 class OrderSummarySerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSummarySerializer(read_only=True)
     first_item = serializers.SerializerMethodField()
@@ -254,7 +230,9 @@ class OrderSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            "id", "shipping_address", "status", "total", "payment_method", "is_paid", "is_refunded",
+            "id", "shipping_address", "status",
+            "subtotal", "delivery_charge", "total",
+            "payment_method", "is_paid", "is_refunded",
             "tracking_number", "created_at", "updated_at", "first_item",
             "refund_status", "refunded_at", "refund_reason"
         ]
@@ -265,9 +243,13 @@ class OrderSummarySerializer(serializers.ModelSerializer):
             return {
                 "product_name": item.product_variant.product_name,
                 "variant_name": item.product_variant.variant_name,
-                "image": item.product_variant.images[0].image if item.product_variant.images.exists() else None
+                "image": (
+                    item.product_variant.images.first().image
+                    if item.product_variant.images.exists() else None
+                )
             }
         return None
+
 
 class CustomerOrderListSerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSerializer(read_only=True)
@@ -276,8 +258,35 @@ class CustomerOrderListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'id', 'shipping_address', 'status', 'total', 'payment_method',
-            'is_paid', 'is_refunded', 'tracking_number',
-            'created_at', 'updated_at', 'items'
+            'id', 'shipping_address', 'status',
+            'subtotal', 'delivery_charge', 'total',
+            'payment_method', 'is_paid', 'is_refunded',
+            'tracking_number', 'created_at', 'updated_at', 'items'
         ]
 
+
+
+class OrderPreviewInputSerializer(serializers.Serializer):
+    items = serializers.ListField(
+        child=serializers.DictField(
+            child=serializers.IntegerField(),
+        ),
+        allow_empty=False,
+        help_text="List of items with product_variant_id and quantity"
+    )
+    postal_code = serializers.CharField(max_length=20, required=False)
+    def validate_items(self, value):
+        for item in value:
+            if "product_variant_id" not in item or "quantity" not in item:
+                raise serializers.ValidationError(
+                    "Each item must include 'product_variant_id' and 'quantity'."
+                )
+            if item["quantity"] <= 0:
+                raise serializers.ValidationError("Quantity must be greater than 0.")
+        return value
+
+
+class OrderPreviewOutputSerializer(serializers.Serializer):
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2)
+    delivery_charge = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total = serializers.DecimalField(max_digits=10, decimal_places=2)

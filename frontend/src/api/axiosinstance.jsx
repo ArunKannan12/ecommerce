@@ -2,6 +2,7 @@ import axios from "axios";
 import { getCsrfToken } from "../utils/csrf";
 
 const BASE_URL = "https://ecommerce-ml5v.onrender.com/api";
+// const BASE_URL = "http://localhost:8000/api"
 
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -44,7 +45,7 @@ axiosInstance.interceptors.response.use(
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
-      !originalRequest.url.includes("auth/jwt/refresh/")
+      !originalRequest.url.includes("/auth/jwt/refresh/")
     ) {
       originalRequest._retry = true;
 

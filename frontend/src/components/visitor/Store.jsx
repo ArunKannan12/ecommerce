@@ -5,16 +5,13 @@ import Category from '../../components/visitor/Category.jsx';
 import FeaturedShimmer from '../../shimmer/FeaturedShimmer.jsx';
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-
 const Store = () => {
   const { categorySlug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // States for filters and ordering
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
-  // Extract filters & search from URL params
   const searchQuery = searchParams.get("search") || "";
   const featuredFilter = searchParams.get("featured") === "true";
   const availableFilter = searchParams.get("is_available") === "true";
@@ -22,7 +19,6 @@ const Store = () => {
 
   const navigate = useNavigate();
 
-  // Fetch products with current filters and ordering
   const fetchProducts = async () => {
     setLoadingProducts(true);
     try {
@@ -36,7 +32,6 @@ const Store = () => {
 
       const res = await axiosInstance.get("products/", { params });
       setProducts(res.data.results || res.data);
-      
     } catch (error) {
       console.error("Error fetching products:", error);
       toast.error("Failed to load products!");
@@ -45,9 +40,7 @@ const Store = () => {
     }
   };
 
-  // Update filters in URL when changed
   const updateFilters = (newFilters) => {
-    // Merge new filters with existing params
     const updated = {
       search: searchQuery || undefined,
       featured: featuredFilter ? "true" : undefined,
@@ -56,7 +49,6 @@ const Store = () => {
       ...newFilters
     };
 
-    // Remove keys with undefined or false to clean URL
     Object.keys(updated).forEach(key => {
       if (updated[key] === undefined || updated[key] === false) {
         delete updated[key];
@@ -66,34 +58,21 @@ const Store = () => {
     setSearchParams(updated);
   };
 
-  // On filter/order/category/search change, refetch
   useEffect(() => {
     fetchProducts();
   }, [categorySlug, searchQuery, featuredFilter, availableFilter, ordering]);
 
-  // When category changes, update URL and clear filters if needed
   const handleCategorySelect = (slug) => {
-    if (slug) {
-      navigate(`/store/${slug}`);
-    } else {
-      navigate('/store');
-    }
+    navigate(slug ? `/store/${slug}` : '/store');
   };
 
   return (
     <>
-      {/* Animation keyframes */}
       <style>
         {`
           @keyframes fadeSlideUp {
-            0% {
-              opacity: 0;
-              transform: translateY(20px);
-            }
-            100% {
-              opacity: 1;
-              transform: translateY(0);
-            }
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
           }
         `}
       </style>
@@ -104,7 +83,7 @@ const Store = () => {
         </h2>
 
         <div className="flex flex-col md:flex-row gap-8">
-          {/* Left Sidebar: Categories */}
+          {/* Sidebar */}
           <aside className="w-full md:w-64 sticky top-24 self-start p-6 bg-white rounded-xl shadow-lg border border-gray-200">
             <Category
               selectedCategorySlug={categorySlug}
@@ -112,11 +91,10 @@ const Store = () => {
             />
           </aside>
 
-          {/* Right Content: Filters + Products */}
+          {/* Main Content */}
           <div className="flex-1 flex flex-col">
             {/* Filters */}
             <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6 flex flex-wrap items-center gap-6 justify-end">
-              {/* Featured Filter */}
               <label className="flex items-center cursor-pointer whitespace-nowrap">
                 <input
                   type="checkbox"
@@ -127,7 +105,6 @@ const Store = () => {
                 <span className="ml-2 text-gray-700 font-semibold select-none">Featured Only</span>
               </label>
 
-              {/* Available Filter */}
               <label className="flex items-center cursor-pointer whitespace-nowrap">
                 <input
                   type="checkbox"
@@ -138,7 +115,6 @@ const Store = () => {
                 <span className="ml-2 text-gray-700 font-semibold select-none">Available Only</span>
               </label>
 
-              {/* Sort By */}
               <div className="ml-auto min-w-[180px]">
                 <label htmlFor="ordering" className="block font-semibold mb-1 text-gray-700">
                   Sort By
@@ -160,60 +136,94 @@ const Store = () => {
               </div>
             </div>
 
-            {/* Products grid */}
+            {/* Products */}
             <section>
               {loadingProducts ? (
-  <FeaturedShimmer />
-) : products.length > 0 ? (
-  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-    {
-    // console.log(products),
-    
-    products.map((product, i) => (
-      <div
-        key={product.id}
-        style={{
-          animation: "fadeSlideUp 0.5s ease forwards",
-          animationDelay: `${i * 100}ms`,
-          opacity: 0,
-          transform: "translateY(20px)",
-        }}
-        className="max-w-sm bg-white rounded-2xl shadow-md overflow-hidden flex flex-col
-                   transform transition-transform duration-300
-                   hover:shadow-xl hover:scale-105 cursor-pointer"
-      >
-        <Link to={`/products/${product.slug}`} className="block group">
-          <div className="h-40 overflow-hidden">
-            <img
-              src={
-                product.image_url || product.image     // ✅ fallback
-              }
-              alt={product.images?.[0]?.alt_text || product.name}
-              className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
-            />
-          </div>
+                <FeaturedShimmer />
+              ) : products.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                  {products.map((product, i) => {
+                    const variant = product.variants?.[0];
+                    const finalPrice = parseFloat(variant?.final_price || "0");
+                    const basePrice = parseFloat(variant?.base_price || "0");
+                    const isDiscounted = basePrice > 0 && finalPrice < basePrice;
+                    const discountPercent = isDiscounted
+                      ? Math.round(((basePrice - finalPrice) / basePrice) * 100)
+                      : 0;
 
-          <div className="p-5 flex flex-col flex-grow">
-            <h3
-              className="text-lg font-semibold text-gray-900 truncate"
-              title={product.name}
-            >
-              {product.name}
-            </h3>
-            <p className="mt-2 text-indigo-600 text-xl">
-              ₹{product.price}
-            </p>
-          </div>
-        </Link>
-      </div>
-    ))}
-  </div>
-) : (
-  <p className="text-center text-gray-500 text-xl mt-20">
-    No products available.
-  </p>
-)}
+                    const imageUrl =
+                      product.image_url ||
+                      variant?.images?.[0]?.url ||
+                      "https://cdn.pixabay.com/photo/2023/01/28/19/01/bird-7751561_1280.jpg";
 
+                    return (
+                      <div
+                        key={product.id}
+                        style={{
+                          animation: "fadeSlideUp 0.5s ease forwards",
+                          animationDelay: `${i * 100}ms`,
+                          opacity: 0,
+                          transform: "translateY(20px)",
+                        }}
+                        className="bg-white rounded-2xl shadow-md overflow-hidden flex flex-col transition-transform duration-300 hover:shadow-xl hover:scale-105 cursor-pointer"
+                      >
+                        <Link to={`/products/${product.slug}`} className="block group">
+                          <div className="h-48 overflow-hidden relative">
+                            <img
+                              src={imageUrl}
+                              alt={variant?.images?.[0]?.alt_text || product.name}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                            />
+                            {product.featured && (
+                              <span className="absolute top-2 left-2 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">
+                                Featured
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="p-5 flex flex-col flex-grow">
+                            <h3 className="text-lg font-semibold text-gray-900 truncate" title={product.name}>
+                              {product.name}
+                            </h3>
+
+                            <div className="mt-2 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xl font-bold text-gray-900">
+                                  ₹{finalPrice.toFixed(2)}
+                                </span>
+                                {isDiscounted && (
+                                  <span className="text-sm text-red-500 line-through">
+                                    ₹{basePrice.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+
+                              {isDiscounted && (
+                                <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                                  {discountPercent}% OFF
+                                </span>
+                              )}
+                            </div>
+
+                            {variant?.stock === 0 && (
+                              <p className="mt-2 text-xs text-gray-500 font-medium">Out of stock</p>
+                            )}
+                            {variant?.stock > 0 && variant?.stock < 5 && (
+                              <p className="mt-2 text-xs text-red-600 font-medium">
+                                Only {variant.stock} left in stock!
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                  <p className="text-center text-gray-500 text-xl mt-20">
+                  No products available.
+                </p>
+              )}
             </section>
           </div>
         </div>

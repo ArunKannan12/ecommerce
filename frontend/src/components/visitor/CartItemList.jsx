@@ -2,8 +2,8 @@ import React from "react";
 
 const CartItemList = ({ cartItems }) => {
   if (!cartItems.length) return <p className="text-gray-500">Your cart is empty.</p>;
-  console.log('cart item from cartlit page',cartItems);
-  
+    
+    
   const getImageUrl = (url) => {
     if (!url) return "/placeholder.png"; // fallback
     return url.startsWith("http") ? url : `http://localhost:8000${url}`;

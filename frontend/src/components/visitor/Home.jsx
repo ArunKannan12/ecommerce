@@ -58,45 +58,76 @@ const Home = () => {
         <p className="text-gray-600">No featured products</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {
-          // console.log(featured),
-          
-          featured.map((prod) => (
-            <Link
-              key={prod.id}
-              to={`/products/${prod.slug}`}
-              className="transform transition duration-300 hover:shadow-xl hover:scale-105 cursor-pointer rounded overflow-hidden bg-white border border-gray-200"
-            >
-              {/* Image with aspect ratio */}
-              <div className="aspect-w-4 aspect-h-3">
-                <img
-                  className="object-cover w-full h-full"
-                  src={
-                    prod.image_url ||prod.image ||
-                    "https://cdn.pixabay.com/photo/2023/01/28/19/01/bird-7751561_1280.jpg"
-                  }
-                  alt={prod.name}
-                />
-              </div>
+          {featured.map((prod) => {
+  const variant = prod.variants?.[0];
+  const finalPrice = parseFloat(variant?.final_price || "0");
+  const basePrice = parseFloat(variant?.base_price || "0");
+  const isDiscounted = basePrice > 0 && finalPrice < basePrice;
+  const discountPercent = isDiscounted
+    ? Math.round(((basePrice - finalPrice) / basePrice) * 100)
+    : 0;
 
-              {/* Product info */}
-              <div className="px-4 sm:px-6 py-3 sm:py-4">
-                <h2 className="font-bold text-lg sm:text-xl mb-2">
-                  {prod.name}
-                </h2>
-                <p className="text-gray-700 text-sm sm:text-base">
-                  {prod.description?.slice(0, 80)}...
-                </p>
-              </div>
+  const imageUrl =
+    prod.image_url ||
+    variant?.images?.[0]?.url ||
+    "https://cdn.pixabay.com/photo/2023/01/28/19/01/bird-7751561_1280.jpg";
 
-              {/* Price tag */}
-              <div className="px-4 sm:px-6 pb-4">
-                <span className="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700">
-                  ₹{prod.price}
-                </span>
-              </div>
-            </Link>
-          ))}
+  return (
+    <Link
+      key={prod.id}
+      to={`/products/${prod.slug}`}
+      className="group block bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-xl transition duration-300 hover:scale-[1.02]"
+    >
+      {/* Image */}
+      <div className="relative aspect-w-4 aspect-h-3">
+        <img
+          src={imageUrl}
+          alt={prod.name}
+          className="object-cover w-full h-full transition duration-300 group-hover:scale-105"
+        />
+        {prod.featured && (
+          <span className="absolute top-2 left-2 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">
+            Featured
+          </span>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-4 sm:p-5">
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1 truncate">
+          {prod.name}
+        </h2>
+        <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+          {prod.description}
+        </p>
+
+        {/* Pricing */}
+        <div className="flex items-center gap-2">
+          <span className="text-base sm:text-lg font-bold text-gray-800">
+            ₹{finalPrice.toFixed(2)}
+          </span>
+          {isDiscounted && (
+            <>
+              <span className="text-sm line-through text-red-500">
+                ₹{basePrice.toFixed(2)}
+              </span>
+              <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                {discountPercent}% OFF
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Stock */}
+        {variant?.stock < 5 && (
+          <p className="mt-2 text-xs text-red-600 font-medium">
+            Only {variant.stock} left in stock!
+          </p>
+        )}
+      </div>
+    </Link>
+  );
+})}
         </div>
       )}
     </section>

@@ -123,26 +123,59 @@ const OrderDetail = () => {
       </div>
 
       {/* Summary */}
+      {/* Summary */}
       <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
         <h2 className="text-xl font-semibold mb-3">Order Summary</h2>
+
         <div className="flex justify-between mb-2">
-          <span className="text-gray-700">Total:</span>
-          <span className="font-medium text-gray-900">₹{totalAmount.toFixed(2)}</span>
+          <span className="text-gray-700">Subtotal:</span>
+          <span className="font-medium text-gray-900">
+            ₹{parseFloat(order.subtotal || 0).toFixed(2)}
+          </span>
         </div>
+
+        <div className="flex justify-between mb-2">
+          <span className="text-gray-700">Delivery Charge:</span>
+          <span className="font-medium text-gray-900">
+            ₹{parseFloat(order.delivery_charge || 0).toFixed(2)}
+          </span>
+        </div>
+
+        <div className="flex justify-between mb-2 border-t pt-2">
+          <span className="text-gray-700">Total:</span>
+          <span className="font-bold text-gray-900">
+            ₹{parseFloat(order.total || 0).toFixed(2)}
+          </span>
+        </div>
+
         <div className="flex justify-between mb-2">
           <span className="text-gray-700">Payment Method:</span>
-          <span className="font-medium text-gray-900">{order.payment_method || "Not selected"}</span>
+          <span className="font-medium text-gray-900">
+            {order.payment_method || "Not selected"}
+          </span>
         </div>
+
         <div className="flex justify-between mb-2">
           <span className="text-gray-700">Payment Status:</span>
-          <span className={order.is_paid ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+          <span
+            className={
+              order.is_paid
+                ? "text-green-600 font-medium"
+                : "text-red-600 font-medium"
+            }
+          >
             {order.is_paid ? "Paid" : "Pending"}
           </span>
         </div>
+
         <div className="flex justify-between mb-2">
           <span className="text-gray-700">Order Status:</span>
-          <span className="font-medium text-gray-900">{order.status || "Processing"}</span>
+          <span className="font-medium text-gray-900">
+            {order.status || "Processing"}
+          </span>
         </div>
+      
+
 
         {/* Refund Info */}
         {refund && (

@@ -4,6 +4,7 @@ from .views import (
     ReferralCheckoutAPIView,
     CartCheckoutAPIView,
     BuyNowAPIView,
+    OrderPreviewAPIView,
 
     # Customer order flows
     OrderListAPIView,
@@ -24,8 +25,9 @@ from .views import (
     ShippingAddressListCreateView,
     ShippingAddressRetrieveUpdateDestroyView,
 
-    # Refund and delivery (if added)
+    # Refund and delivery
     RefundStatusAPIView,
+   
 )
 
 urlpatterns = [
@@ -33,6 +35,7 @@ urlpatterns = [
     path('checkout/referral/', ReferralCheckoutAPIView.as_view(), name='checkout-referral'),
     path('checkout/cart/', CartCheckoutAPIView.as_view(), name='checkout-cart'),
     path('checkout/buy-now/', BuyNowAPIView.as_view(), name='checkout-buy-now'),
+    path('checkout/preview/', OrderPreviewAPIView.as_view(), name='checkout-preview'),
 
     # 📦 Customer Order APIs
     path('orders/', OrderListAPIView.as_view(), name='orders-list'),
@@ -42,6 +45,7 @@ urlpatterns = [
     path('orders/<int:id>/cancel/', CancelOrderAPIView.as_view(), name='orders-cancel'),
     path('orders/<int:id>/razorpay/', RazorpayOrderCreateAPIView.as_view(), name='orders-razorpay-create'),
     path('orders/razorpay/verify/', RazorpayPaymentVerifyAPIView.as_view(), name='orders-razorpay-verify'),
+    path('orders/<int:id>/refund-status/', RefundStatusAPIView.as_view(), name='orders-refund-status'),
 
     # 🚚 Warehouse Item APIs
     path('items/', OrderItemListAPIView.as_view(), name='items-list'),
@@ -53,6 +57,4 @@ urlpatterns = [
     path('shipping-addresses/', ShippingAddressListCreateView.as_view(), name='shipping-addresses-list-create'),
     path('shipping-addresses/<int:id>/', ShippingAddressRetrieveUpdateDestroyView.as_view(), name='shipping-addresses-detail'),
 
-    # 💸 Refund APIs
-    path('orders/<int:id>/refund-status/', RefundStatusAPIView.as_view(), name='orders-refund-status'),
-]
+   ]

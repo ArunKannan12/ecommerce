@@ -48,7 +48,11 @@ class Order(models.Model):
 
     shipping_address = models.ForeignKey(ShippingAddress, on_delete=models.CASCADE)
     status = models.CharField(choices=OrderStatus.choices, default=OrderStatus.PENDING, max_length=20)
+
+    subtotal=models.DecimalField(max_digits=10,decimal_places=2,default=Decimal('0.00'))
+    delivery_charge=models.DecimalField( max_digits=10, decimal_places=2,default=Decimal('0.00'))
     total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+
     payment_method = models.CharField(max_length=50, choices=PaymentMethod.choices, default=PaymentMethod.COD)
     is_paid = models.BooleanField(default=False)
     is_refunded = models.BooleanField(default=False)

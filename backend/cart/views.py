@@ -167,10 +167,12 @@ class CartMergeAPIView(APIView):
 
         return Response({
             "detail": "Cart merged successfully",
+            "cart": CartSummarySerializer(cart, context={'request': request}).data,
             "merged_items": merged_items,
             "skipped_items": skipped_items,
             "failed_items": failed_items
-        }, status=status.HTTP_200_OK)
+        })
+
 
 class ProductVariantBulkAPIView(APIView):
     permission_classes = [AllowAny]
@@ -192,47 +194,26 @@ class GuestCartDetailsAPIView(APIView):
 
     def post(self, request):
         guest_cart = request.data.get("cart", [])
-
-        # Always return consistent empty cart response
         if not isinstance(guest_cart, list) or not guest_cart:
-            return Response({
-                "items": [],
-                "total_quantity": 0,
-                "total_price": "0.00"
-            }, status=status.HTTP_200_OK)
+            return Response({"items": [], "total_quantity": 0, "total_price": "0.00"}, status=200)
 
-        # Extract variant IDs
         variant_ids = [item.get("product_variant_id") for item in guest_cart if item.get("product_variant_id")]
+        variants = ProductVariant.objects.filter(id__in=variant_ids).select_related('product').prefetch_related('images')
 
-        # Fetch variants efficiently
-        variants = (
-            ProductVariant.objects
-            .filter(id__in=variant_ids)
-            .select_related('product')
-            .prefetch_related('images', 'product__images')
-        )
-
-        serialized_variants = ProductVariantSerializer(variants, many=True).data
+        serialized_variants = ProductVariantSerializer(variants, many=True, context={'request': request}).data
+        variant_map = {v["id"]: v for v in serialized_variants}
 
         items = []
         total_quantity = 0
         total_price = Decimal("0.00")
 
-        # Map variant_id → serialized data for quick lookup
-        variant_map = {v["id"]: v for v in serialized_variants}
-
         for cart_item in guest_cart:
             variant_id = cart_item.get("product_variant_id")
             quantity = int(cart_item.get("quantity", 1))
-
             variant_data = variant_map.get(variant_id)
             if variant_data:
-                price = Decimal(str(variant_data.get("price", "0.00")))
-                items.append({
-                    "product_variant_detail": variant_data,
-                    "quantity": quantity,
-                    "price": str(price)
-                })
+                price = Decimal(str(variant_data.get("final_price", "0.00")))
+                items.append({**variant_data, "quantity": quantity, "price": str(price)})
                 total_quantity += quantity
                 total_price += price * quantity
 
@@ -240,4 +221,4 @@ class GuestCartDetailsAPIView(APIView):
             "items": items,
             "total_quantity": total_quantity,
             "total_price": str(total_price)
-        }, status=status.HTTP_200_OK)
+        }, status=200)

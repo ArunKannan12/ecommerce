@@ -8,7 +8,8 @@ from .views import (
     CookieTokenObtainPairView,
     CookieTokenRefreshView,
     LogoutView,
-    SetCSRFCookieView
+    SetCSRFCookieView,
+    custom_jwt_view
 )
 
 
@@ -34,4 +35,5 @@ urlpatterns = [
 
     # Set CSRF token
     path('auth/csrf/', SetCSRFCookieView.as_view(), name='set-csrf'),
+    path('sample',custom_jwt_view)
 ]

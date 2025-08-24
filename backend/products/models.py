@@ -34,7 +34,6 @@ class Product(models.Model):
     name = models.CharField(max_length=50)
     slug = models.SlugField(unique=True)
     description = models.TextField()
-    price = models.DecimalField(max_digits=50, decimal_places=2)
     is_available = models.BooleanField(default=True)
     featured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -81,13 +80,23 @@ class ProductVariant(models.Model):
     variant_name = models.CharField(max_length=50)
     promoter_commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     sku = models.CharField(max_length=50, unique=True)
-    additional_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     stock = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    base_price = models.DecimalField(max_digits=10, decimal_places=2,null=True)  
+    offer_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)  
 
+    def clean(self):
+        if self.base_price is None:
+            raise ValidationError("Base price must be set.")
+        if self.offer_price and self.offer_price > self.base_price:
+            raise ValidationError("Offer price cannot exceed base price.")
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)   
+        
     @property
     def final_price(self):
-        return self.product.price + self.additional_price
+        return self.offer_price if self.offer_price else self.base_price
 
     def __str__(self):
         return f"{self.product.name} - {self.variant_name}"
