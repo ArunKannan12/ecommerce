@@ -9,6 +9,11 @@ from .views import (
     RelatedProductsAPIView,
     ProductVariantImageListCreateAPIView,
     ProductVariantImageRetrieveUpdateDestroyAPIView,
+    CustomerBannerListAPIView,
+    AdminBannerListAPIView,
+    BannerCreateAPIView,
+    BannerUpdateDestroyAPIView,
+
 )
 from django.urls import path
 
@@ -30,4 +35,12 @@ urlpatterns = [
     # -------------------- VARIANT IMAGES --------------------
     path('variants/<int:variant_id>/images/', ProductVariantImageListCreateAPIView.as_view(), name='variant-image-list-create'),
     path('variants/images/<int:id>/', ProductVariantImageRetrieveUpdateDestroyAPIView.as_view(), name='variant-image-detail'),
+
+    path("banner/active/", CustomerBannerListAPIView.as_view(), name="customer-banner-list"),
+
+    # Admin
+    path("admin/", AdminBannerListAPIView.as_view(), name="admin-banner-list"),
+    path("admin/create/", BannerCreateAPIView.as_view(), name="banner-create"),
+    path("admin/<int:pk>/", BannerUpdateDestroyAPIView.as_view(), name="banner-update-destroy"),
+
 ]

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import CartShimmer from "../../shimmer/CartShimmer";
 import axiosInstance from "../../api/axiosinstance";
 import {
   useGetCartQuery,
@@ -9,11 +8,15 @@ import {
 } from "../../contexts/cartSlice";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/authContext";
+import CartShimmer from "../../shimmer/CartShimmer";
+import ConfirmModal from "../helpers/ConfirmModal";
 
 const Cart = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
   const [guestCartItems, setGuestCartItems] = useState([]);
+  const [guestLoading, setGuestLoading] = useState(false);
 
   const { data: authCartData, isLoading: authLoading, refetch: refetchCart } =
     useGetCartQuery(undefined, { skip: !isAuthenticated });
@@ -21,10 +24,20 @@ const Cart = () => {
   const [updateCartItem] = useUpdateCartItemMutation();
   const [removeCartItem] = useRemoveCartItemMutation();
 
+  // Delete confirmation state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
   // Load guest cart
   const loadGuestCart = async () => {
+    setGuestLoading(true);
     const localCart = JSON.parse(localStorage.getItem("cart")) || [];
-    if (!localCart.length) return setGuestCartItems([]);
+    if (!localCart.length) {
+      setGuestCartItems([]);
+      setGuestLoading(false);
+      return;
+    }
 
     try {
       const variantIds = localCart.map((item) => item.product_variant_id);
@@ -33,10 +46,7 @@ const Cart = () => {
       });
 
       const enriched = res.data.map((variant) => {
-        const localItem = localCart.find(
-          (i) => i.product_variant_id === variant.id
-        );
-
+        const localItem = localCart.find((i) => i.product_variant_id === variant.id);
         const final_price =
           variant.offer_price && parseFloat(variant.offer_price) < parseFloat(variant.base_price)
             ? parseFloat(variant.offer_price)
@@ -53,6 +63,8 @@ const Cart = () => {
     } catch {
       toast.error("Failed to load product details");
       setGuestCartItems(localCart);
+    } finally {
+      setGuestLoading(false);
     }
   };
 
@@ -69,16 +81,11 @@ const Cart = () => {
   }, [isAuthenticated]);
 
   const cartItems = isAuthenticated ? authCartData || [] : guestCartItems;
-  const loading = isAuthenticated ? authLoading : false;
+  const loading = isAuthenticated ? authLoading : guestLoading;
 
-  const getImageUrl = (item) => {
-    if (!item?.images?.length) return "/placeholder.png";
-    return item.images[0].url;
-  };
+  const getImageUrl = (item) => item?.images?.[0]?.url || "/placeholder.png";
 
-  
-  
-
+  // Quantity update
   const handleUpdateQuantity = (itemId, newQty) => {
     if (newQty < 1) return;
 
@@ -96,31 +103,45 @@ const Cart = () => {
       );
       localStorage.setItem(
         "cart",
-        JSON.stringify(
-          updated.map((i) => ({ product_variant_id: i.id, quantity: i.quantity }))
-        )
+        JSON.stringify(updated.map((i) => ({ product_variant_id: i.id, quantity: i.quantity })))
       );
       setGuestCartItems(updated);
       window.dispatchEvent(new Event("cartUpdated"));
     }
   };
 
-  const handleRemoveItem = (itemId) => {
-    if (isAuthenticated) {
-      const cartItem = cartItems.find((i) => i.id === itemId);
-      if (!cartItem) return;
+  // Open confirmation modal for removing item
+  const confirmRemoveItem = (item) => {
+    setItemToDelete(item);
+    setDeleteConfirmOpen(true);
+  };
 
-      removeCartItem(cartItem.id).catch(() => toast.error("Failed to remove item"));
-    } else {
-      const updated = guestCartItems.filter((i) => i.id !== itemId);
-      localStorage.setItem(
-        "cart",
-        JSON.stringify(
-          updated.map((i) => ({ product_variant_id: i.id, quantity: i.quantity }))
-        )
-      );
-      setGuestCartItems(updated);
-      window.dispatchEvent(new Event("cartUpdated"));
+  // Handle deletion
+  const handleDeleteItem = async () => {
+    if (!itemToDelete) return;
+    setDeleting(true);
+
+    try {
+      if (isAuthenticated) {
+        const cartItem = cartItems.find((i) => i.id === itemToDelete.id);
+        if (cartItem) await removeCartItem(cartItem.id);
+      } else {
+        const updated = guestCartItems.filter((i) => i.id !== itemToDelete.id);
+        localStorage.setItem(
+          "cart",
+          JSON.stringify(updated.map((i) => ({ product_variant_id: i.id, quantity: i.quantity })))
+        );
+        setGuestCartItems(updated);
+        window.dispatchEvent(new Event("cartUpdated"));
+      }
+
+      toast.success("Item removed from cart");
+      setDeleteConfirmOpen(false);
+      setItemToDelete(null);
+    } catch {
+      toast.error("Failed to remove item");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -130,95 +151,88 @@ const Cart = () => {
   );
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <h1 className="text-4xl font-extrabold mb-10 text-gray-900">Your Cart</h1>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <h1 className="text-3xl sm:text-4xl font-extrabold mb-8 text-gray-900 tracking-tight">
+        Your Cart
+      </h1>
 
       {loading ? (
         <CartShimmer count={3} />
       ) : !cartItems.length ? (
         <p className="text-center text-gray-500 text-lg">No items in your cart</p>
       ) : (
-        <div className="space-y-8">
-          {
-          
-
-          
-          cartItems.map((item) => (
+        <div className="space-y-6">
+          {cartItems.map((item) => (
             <div
               key={item.id}
-              className="flex flex-col md:flex-row items-start md:items-center border rounded-xl p-6 shadow-lg hover:shadow-2xl transition-shadow bg-white"
+              className="flex flex-col md:flex-row items-start md:items-center border border-gray-200 rounded-3xl p-6 shadow-md hover:shadow-xl transition-shadow bg-white"
             >
               {/* Product Image */}
-              <img
-                src={getImageUrl(item)}
-                alt={item.product_name || "Product"}
-                className="w-28 h-28 object-cover rounded-lg mb-4 md:mb-0 md:mr-6"
-              />
+              <div className="flex-shrink-0 w-full sm:w-32 md:w-28 lg:w-32 mb-4 md:mb-0">
+                <img
+                  src={getImageUrl(item)}
+                  alt={item.product_name || "Product"}
+                  className="w-full h-full object-cover rounded-2xl"
+                />
+              </div>
 
               {/* Product Info */}
-              <div className="flex-1">
-                <h2 className="text-xl font-semibold text-gray-800">
+              <div className="flex-1 md:ml-6 w-full">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate capitalize">
                   {item.product_name} - {item.variant_name || "Default"}
                 </h2>
-                <p className="text-gray-500 mt-1 line-clamp-2">
-                  {item.product_description || "No description available"}
-                </p>
 
                 {/* Pricing */}
-                <div className="mt-3 flex items-center space-x-4">
+                <div className="mt-3 flex flex-wrap items-center gap-3">
                   {item.offer_price && parseFloat(item.offer_price) < parseFloat(item.base_price) ? (
                     <>
-                      <p className="text-2xl font-bold text-green-600">
+                      <p className="text-xl sm:text-2xl font-bold text-green-600">
                         ₹{item.final_price}
                       </p>
-                      <p className="text-gray-400 line-through">₹{item.base_price}</p>
-                      <p className="text-red-500 font-medium">
-                        {Math.round(
-                          ((item.base_price - item.final_price) / item.base_price) * 100
-                        )}
-                        % OFF
+                      <p className="text-gray-400 line-through text-sm sm:text-base">
+                        ₹{item.base_price}
+                      </p>
+                      <p className="text-red-500 font-semibold text-sm sm:text-base">
+                        {Math.round(((item.base_price - item.final_price) / item.base_price) * 100)}% OFF
                       </p>
                     </>
                   ) : (
-                    <p className="text-2xl font-bold text-gray-800">₹{item.final_price}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-900">₹{item.final_price}</p>
                   )}
                 </div>
 
-                {/* Subtotal */}
-                <p className="text-gray-600 mt-1">
+                <p className="text-gray-600 mt-2 text-sm sm:text-base">
                   Subtotal: ₹{(item.final_price * item.quantity).toFixed(2)}
                 </p>
 
-                {/* Stock Warning */}
                 {item.stock < 5 && (
-                  <p className="text-red-600 mt-1 font-medium">
-                    Only {item.stock} left in stock!
-                  </p>
+                  <p className="text-red-600 mt-1 font-medium text-sm">Only {item.stock} left in stock!</p>
                 )}
               </div>
 
-              {/* Quantity Controls */}
-              <div className="flex flex-col md:flex-row items-center mt-5 md:mt-0 md:space-x-4 space-y-2 md:space-y-0">
-                <div className="flex items-center space-x-2 border rounded-lg px-2 py-1 bg-gray-50">
+              {/* Quantity Controls & Remove */}
+              <div className="flex flex-row md:flex-col items-center md:items-end mt-4 md:mt-0 space-x-4 md:space-x-0 md:space-y-3 w-full md:w-auto">
+                <div className="flex items-center space-x-2 border rounded-full px-3 py-1 bg-gray-50">
                   <button
                     onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
                     disabled={item.quantity <= 1}
-                    className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 transition"
+                    className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
                   >
                     -
                   </button>
-                  <span className="font-medium">{item.quantity}</span>
+                  <span className="font-medium text-gray-800">{item.quantity}</span>
                   <button
                     onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
                     disabled={item.quantity >= item.stock}
-                    className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 transition"
+                    className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
                   >
                     +
                   </button>
                 </div>
+
                 <button
-                  onClick={() => handleRemoveItem(item.id)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                  onClick={() => confirmRemoveItem(item)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition font-medium"
                 >
                   Remove
                 </button>
@@ -227,8 +241,8 @@ const Cart = () => {
           ))}
 
           {/* Cart Total & Checkout */}
-          <div className="mt-10 border-t pt-6 flex flex-col md:flex-row justify-between items-center bg-gray-50 p-4 rounded-lg shadow-inner">
-            <p className="text-2xl font-bold text-gray-900 mb-4 md:mb-0">
+          <div className="mt-10 border-t border-gray-200 pt-6 flex flex-col sm:flex-row justify-between items-center bg-gray-50 p-6 rounded-2xl shadow-inner">
+            <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 sm:mb-0">
               Total: ₹{cartTotal.toFixed(2)}
             </p>
             <button
@@ -239,13 +253,25 @@ const Cart = () => {
                   navigate("/login", { state: { from: "/checkout" } });
                 }
               }}
-              className="px-8 py-3 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition"
+              className="px-8 py-3 bg-gradient-to-r from-[#155dfc] to-[#0f4bc4] text-white text-lg font-semibold rounded-2xl hover:opacity-90 transition"
             >
               Proceed to Checkout
             </button>
           </div>
         </div>
       )}
+
+      {/* Confirm Modal for deletion */}
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteItem}
+        title="Confirm Delete"
+        message={`Are you sure you want to remove "${itemToDelete?.product_name}" from your cart?`}
+        confirmText="Yes, Delete"
+        cancelText="Cancel"
+        loading={deleting}
+      />
     </div>
   );
 };

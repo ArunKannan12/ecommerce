@@ -39,6 +39,12 @@ class IsWarehouseStaffOrAdmin(BasePermission):
         return request.user.is_authenticated and (
             request.user.is_staff or getattr(request.user,'role','') in ['admin','warehouse_staff']
         )
+    
+class IsWarehouseStaff(BasePermission):
+    def has_permission(self, request, view):
+        user=request.user
+        return user.is_authenticated and getattr(user,'role',None) == 'warehouse_staff'
+     
 class IsInvestorOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and (

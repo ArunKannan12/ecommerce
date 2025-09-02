@@ -1,8 +1,8 @@
 from rest_framework import generics, permissions, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Product, ProductVariant, Category, ProductVariantImage
+from .models import Product, ProductVariant, Category, ProductVariantImage,Banner
 from .serializers import (
-    ProductSerializer, CategorySerializer,
+    ProductSerializer, CategorySerializer,BannerSerializer,
     ProductVariantSerializer, ProductVariantImageSerializer
 )
 from accounts.permissions import IsAdmin, IsAdminOrReadOnly
@@ -83,6 +83,11 @@ class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
         product_id = self.kwargs.get('product_id')
         serializer.save(product_id=product_id)
 
+    def perform_update(self, serializer):
+        # Ensures validation for returnable/replacement fields is applied
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
 
 class ProductVariantRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductVariantSerializer
@@ -94,7 +99,10 @@ class ProductVariantRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyA
             return [IsAdmin()]
         return [permissions.AllowAny()]
 
-
+    def perform_update(self, serializer):
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        
 # -------------------- FEATURED & RELATED --------------------
 class FeaturedProductsAPIView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
@@ -138,3 +146,35 @@ class ProductVariantImageRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDes
 
     def get_queryset(self):
         return ProductVariantImage.objects.all()
+
+# CUSTOMER: list only active banners (no filters, no search)
+class CustomerBannerListAPIView(generics.ListAPIView):
+    queryset = Banner.objects.filter(is_active=True).order_by("order")
+    serializer_class = BannerSerializer
+    permission_classes = [permissions.AllowAny]
+
+
+# ADMIN: list all banners with search & filtering
+class AdminBannerListAPIView(generics.ListAPIView):
+    queryset = Banner.objects.all().order_by("order")
+    serializer_class = BannerSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["is_active"]   # ?is_active=true/false
+    search_fields = ["title", "subtitle"]  # ?search=summer
+    ordering_fields = ["order", "created_at"]  # ?ordering=order or ?ordering=-created_at
+
+
+# ADMIN: create banners
+class BannerCreateAPIView(generics.CreateAPIView):
+    queryset = Banner.objects.all()
+    serializer_class = BannerSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+
+# ADMIN: retrieve, update, delete
+class BannerUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Banner.objects.all()
+    serializer_class = BannerSerializer
+    permission_classes = [permissions.IsAdminUser]

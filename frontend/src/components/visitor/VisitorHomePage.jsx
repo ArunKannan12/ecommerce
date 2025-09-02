@@ -1,32 +1,33 @@
-import React from "react";
+import React,{useState,useEffect} from "react";
 import Navbar from "./Navbar";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
+import { useAuth } from "../../contexts/authContext";
+import BottomNav from "./MobileBottomNav";
+import { useCartCount } from "../../utils/useCartCount";
+
 
 const VisitorHomePage = () => {
-  const location = useLocation();
-
-  // Check if route is home
-  const isHome = location.pathname === "/";
-
+  const { isAuthenticated, logout } = useAuth();
+  const totalItems = useCartCount();
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Fixed Navbar */}
       <div className="fixed top-0 left-0 w-full z-50 bg-white shadow">
-        <Navbar />
+        <Navbar
+          isAuthenticated={isAuthenticated}
+          totalItems={totalItems}
+          logout={logout}
+        />
       </div>
 
-      {/* Add padding to prevent content hiding under navbar */}
-      <div className="pt-[64px] flex-1">
-        {isHome ? (
-          <main className="w-full py-8">
-            <Outlet />
-          </main>
-        ) : (
-          <main className="w-full py-8">
-            <Outlet />
-          </main>
-        )}
+      <div className="pt-[64px] flex-1 px-4">
+        <Outlet />
       </div>
+
+      <BottomNav
+        isAuthenticated={isAuthenticated}
+        totalItems={totalItems}
+        logout={logout}
+      />
     </div>
   );
 };

@@ -1,8 +1,8 @@
 import nested_admin
 from django.contrib import admin
 from django.utils.safestring import mark_safe
-from .models import Category, Product, ProductVariant, ProductVariantImage
-
+from .models import Category, Product, ProductVariant, ProductVariantImage,Banner
+from .forms import ProductVariantForm
 
 # --------------------- CATEGORY ---------------------
 @admin.register(Category)
@@ -22,12 +22,15 @@ class ProductVariantImageInline(nested_admin.NestedTabularInline):
 # --------------------- VARIANTS ---------------------
 class ProductVariantInline(nested_admin.NestedTabularInline):
     model = ProductVariant
+    form=ProductVariantForm
     extra = 1
     inlines = [ProductVariantImageInline]  # nested variant images
     show_change_link = True
     fields = (
         'variant_name', 'sku', 'base_price', 'offer_price',
-        'stock', 'is_active', 'promoter_commission_rate'
+        'stock', 'is_active', 'promoter_commission_rate',
+        'is_returnable', 'return_days',           
+        'is_replacement_only', 'replacement_days'  
     )
     readonly_fields = ('final_price_display',)
 
@@ -68,17 +71,19 @@ class ProductAdmin(nested_admin.NestedModelAdmin):
 # --------------------- VARIANTS ADMIN ---------------------
 @admin.register(ProductVariant)
 class ProductVariantAdmin(admin.ModelAdmin):
-    list_display = ('id',
-        'product', 'variant_name', 'sku', 'base_price', 'offer_price',
-        'final_price', 'stock', 'is_active', 'promoter_commission_rate'
+    list_display = (
+        'id', 'product', 'variant_name', 'sku', 'base_price', 'offer_price',
+        'final_price', 'stock', 'is_active', 'promoter_commission_rate',
+        'is_returnable', 'return_days', 'is_replacement_only', 'replacement_days'  # ← added
     )
-    list_filter = ('is_active',)
+    list_filter = ('is_active', 'is_returnable', 'is_replacement_only')  # optional
     search_fields = ('variant_name', 'sku', 'product__name')
     inlines = [ProductVariantImageInline]
 
     def final_price_display(self, obj):
         return obj.final_price
     final_price_display.short_description = "Final Price"
+
 
 
 # --------------------- VARIANT IMAGES ADMIN ---------------------
@@ -98,3 +103,21 @@ class ProductVariantImageAdmin(admin.ModelAdmin):
         return "No Image"
 
     thumbnail.short_description = "Preview"
+
+@admin.register(Banner)
+class BannerAdmin(admin.ModelAdmin):
+    list_display = ("id", "title", "order", "is_active", "created_at")
+    list_filter = ("is_active", "created_at")
+    search_fields = ("title", "subtitle")
+    ordering = ("order",)
+    readonly_fields = ("created_at", "updated_at")
+
+    fieldsets = (
+        ("Basic Info", {
+            "fields": ("title", "subtitle", "image", "link_url", "order", "is_active")
+        }),
+        ("Timestamps", {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",)
+        }),
+    )

@@ -1,36 +1,62 @@
+from django.utils.dateparse import parse_date
+import logging
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter    
-from orders.serializers import ( OrderItemSerializer,
-                                OrderSummarySerializer,
-                                OrderDetailSerializer,
-                                OrderSerializer)
+
+from rest_framework.filters import SearchFilter
+
+from django.db.models import Q
+
 from .serializers import (OrderSerializer,
+                          ReturnRequestSerializer,
                         ShippingAddressSerializer,
                         CartCheckoutInputSerializer,
                         ReferralCheckoutInputSerializer,
                         OrderPreviewInputSerializer,
                         OrderPreviewOutputSerializer,
-                        CustomerOrderListSerializer)
-from rest_framework.generics import (ListAPIView,RetrieveAPIView,
+                        CustomerOrderListSerializer,
+                        OrderItemSerializer,
+                        OrderSummarySerializer,
+                        OrderDetailSerializer,
+                        OrderSerializer)
+
+from rest_framework.generics import (ListAPIView,RetrieveAPIView,CreateAPIView,
+                                     UpdateAPIView,
                                     ListCreateAPIView,
                                     RetrieveUpdateDestroyAPIView)
-from accounts.permissions import IsCustomer,IsAdminOrCustomer,IsWarehouseStaffOrAdmin
+
+from accounts.permissions import (IsCustomer,
+                                IsAdminOrCustomer,
+                                IsWarehouseStaffOrAdmin,
+                                IsAdmin,
+                                IsWarehouseStaff)
+
+from delivery.permissions import IsDeliveryManOrAdmin,IsDeliveryMan
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 from cart.models import CartItem
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
-from .models import Order,OrderItem,ShippingAddress
+from .models import Order,OrderItem,ShippingAddress,ReturnRequest
 from django.db import transaction
 import razorpay
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 import logging
-from .utils import create_order_with_items,update_item_status,validate_payment_method
-from .helpers import validate_shipping_address,prepare_order_response,validate_promoter,calculate_order_preview
-from django.utils import timezone
+from .utils import (create_order_with_items,
+                    update_item_status,
+                    check_refund_status,
+                    validate_payment_method,
+                    process_refund)
+
+from .helpers import( validate_shipping_address,
+                    prepare_order_response,
+                    validate_promoter,
+                    calculate_order_preview)
+
 from delivery.permissions import IsDeliveryManOrAdmin
+from django.db import models
+
 
 def get_or_create_shipping_address(user, address_data):
     normalized = {k: v.strip() for k, v in address_data.items()}
@@ -168,24 +194,58 @@ class CancelOrderAPIView(APIView):
     @transaction.atomic
     def post(self, request, id):
         user = request.user
+        role = getattr(user,'role',None)
         try:
-            order = Order.objects.get(id=id) if user.is_staff else Order.objects.get(id=id, user=user)
+            order=Order.objects.get(id=id) if role == 'admin' else Order.objects.get(id=id,user=user)
         except Order.DoesNotExist:
-            raise ValidationError("Order not found")
+            raise ValidationError('order not found')
 
         if order.status in ["cancelled", "delivered", "shipped"]:
             return Response({"message": f"Cannot cancel order once it's {order.status}"}, status=status.HTTP_400_BAD_REQUEST)
 
-        reason = request.data.get("cancel_reason", "")
-        # Refund logic omitted for brevity; same as your existing Razorpay refund handling
+        if order.is_paid:
+            process_refund(order)
+        
+        for item in order.orderitem_set.all():
+            product_variant=item.product_variant
+            product_variant.stock += item.quantity
+            product_variant.save(update_fields=["stock"])
+
+            item.status='cancelled'
+            item.save(update_fields=['status'])
 
         order.status = "cancelled"
-        order.cancel_reason = reason
+        order.cancel_reason = request.data.get('cancel_reason','')
         order.cancelled_at = timezone.now()
         order.cancelled_by = user
-        order.cancelled_by_role = "admin" if user.is_staff else "customer"
-        order.save()
-        return Response({"message": "Order cancelled successfully"})
+        order.cancelled_by_role = 'admin' if role == 'admin' else 'customer'
+        order.is_restocked=True
+        order.save(update_fields=[
+            "status", "cancel_reason", "cancelled_at",
+            "cancelled_by", "cancelled_by_role",
+            "is_refunded", "refunded_at", "refund_status",'refund_id','is_restocked'
+        ])
+
+        return Response(
+        {
+            "success": True,
+            "message": "Order cancelled successfully",
+            "order": {
+                "id": order.id,
+                "status": order.status,
+                "payment_method": order.payment_method,
+                "is_paid": order.is_paid,
+                "is_refunded": order.is_refunded,
+                "refund_status": order.refund_status if order.payment_method == "Razorpay" else None,
+                "refund_id": order.refund_id if order.payment_method == "Razorpay" else None,
+                "cancel_reason": order.cancel_reason,
+                "cancelled_by": order.cancelled_by.email,
+                "cancelled_by_role": order.cancelled_by_role,
+            },
+        }
+    )
+
+
     
 class RazorpayOrderCreateAPIView(APIView):
     permission_classes = [IsCustomer]
@@ -253,44 +313,6 @@ class RazorpayPaymentVerifyAPIView(APIView):
 
         return Response({"message": "Payment verified and order updated"})
     
-class RefundStatusAPIView(APIView):
-    permission_classes = [IsAdminOrCustomer]
-
-    @transaction.atomic
-    def get(self, request, id):
-        user = request.user
-        logger = logging.getLogger(__name__)
-
-        # Fetch order based on role
-        try:
-            order = Order.objects.get(id=id) if user.is_staff else Order.objects.get(id=id, user=user)
-        except Order.DoesNotExist:
-            logger.warning(f"Refund status check failed: Order {id} not found for user {user.email}")
-            raise ValidationError("Order not found")
-
-        # No refund initiated
-        if not order.refund_id:
-            logger.info(f"No refund initiated for order {order.id} by {user.email}")
-            return Response({
-                "message": "No refund has been initiated for this order.",
-                "order_status": order.status,
-                "is_paid": order.is_paid,
-                "payment_method": order.payment_method
-            }, status=status.HTTP_200_OK)
-
-        # Refund info response
-        return Response({
-            "order_id": order.id,
-            "refund_id": order.refund_id,
-            "refund_status": order.refund_status,
-            "refunded_at": order.refunded_at,
-            "payment_method": order.payment_method,
-            "is_paid": order.is_paid,
-            "cancel_reason": order.cancel_reason,
-            "refund_reason": order.refund_reason
-        }, status=status.HTTP_200_OK)
-
-
 class PickOrderItemAPIView(APIView):
     permission_classes = [IsWarehouseStaffOrAdmin]
 
@@ -324,18 +346,35 @@ class OrderItemListAPIView(ListAPIView):
     def get_queryset(self):
         logger = logging.getLogger(__name__)
         statuses = self.request.query_params.getlist('status')
+        include_cancelled = self.request.query_params.get('include_cancelled', 'false').lower() == 'true'
 
+        # Default statuses if none provided
         if not statuses:
             statuses = ['pending', 'picked', 'packed']
             logger.info(f"No status filter provided. Defaulting to {statuses}")
 
-        queryset = OrderItem.objects.filter(status__in=statuses).select_related(
-            'order', 'product_variant__product'
-        ).order_by('status', 'id')
+        queryset = OrderItem.objects.select_related('order', 'product_variant__product')
 
-        logger.debug(f"Warehouse item list fetched by {self.request.user.email} with statuses: {statuses}")
+        if include_cancelled:
+            # Include items from cancelled orders
+            queryset = queryset.filter(
+                models.Q(status__in=statuses) | models.Q(order__status='cancelled')
+            )
+        else:
+            # Exclude cancelled orders
+            queryset = queryset.filter(
+                status__in=statuses,
+                order__status__in=['pending', 'processing', 'shipped']
+            )
+
+        queryset = queryset.order_by('status', 'id')
+
+        logger.debug(f"Warehouse item list fetched by {self.request.user.email} "
+                     f"with statuses: {statuses}, include_cancelled={include_cancelled}")
         return queryset
-from django.utils.dateparse import parse_date
+
+
+
   
 class OrderSummaryListAPIView(ListAPIView):
     serializer_class = OrderSummarySerializer
@@ -421,7 +460,7 @@ class BuyNowAPIView(APIView):
         user = request.user
         items = request.data.get("items", [])
         shipping_address_input = request.data.get("shipping_address") or request.data.get("shipping_address_id")
-        payment_method = request.data.get("payment_method", "").strip().title()
+        payment_method = request.data.get("payment_method", "").strip()
 
         # Validate items
         if not items or not isinstance(items, list):
@@ -445,8 +484,6 @@ class BuyNowAPIView(APIView):
 
 
     
-from django.utils.dateparse import parse_date
-import logging
 
 class OrderListAPIView(ListAPIView):
     serializer_class = CustomerOrderListSerializer
@@ -479,3 +516,107 @@ class OrderPreviewAPIView(APIView):
 
         result = calculate_order_preview(data["items"], data["postal_code"])
         return Response(OrderPreviewOutputSerializer(result).data, status=status.HTTP_200_OK)
+
+
+class ReturnRequestCreateAPIView(CreateAPIView):
+    serializer_class = ReturnRequestSerializer
+    permission_classes = [IsCustomer]
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        serializer.save(
+            user=user,
+            status="pending",
+            refund_amount=0
+        )
+
+
+class ReturnRequestUpdateAPIView(UpdateAPIView):
+    queryset = ReturnRequest.objects.all()
+    serializer_class = ReturnRequestSerializer
+
+    def get_permissions(self):
+        role = getattr(self.request.user, 'role', None)
+        if role == 'admin':
+            return [IsAdmin()]
+        elif role == 'warehouse_staff':
+            return [IsWarehouseStaff()]
+        elif role == 'deliveryman':
+            return [IsDeliveryMan()]
+        elif role == 'customer':
+            return [IsCustomer()]
+        return super().get_permissions()
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        user = self.request.user
+        role = getattr(user, 'role', None)
+
+        if role == 'deliveryman' and instance.pickup_status == 'approved':
+            instance.pickup_verified_by = user
+            instance.save(update_fields=['pickup_status', 'pickup_verified_by', 'pickup_comment'])
+            return
+
+        elif role == 'warehouse_staff':
+            instance.warehouse_approved = bool(self.request.data.get('warehouse_approved', False))
+            instance.warehouse_comment = self.request.data.get('warehouse_comment', '')
+            instance.save(update_fields=['warehouse_approved', 'warehouse_comment'])
+            return
+
+        elif role == 'admin' and instance.status == "approved" and instance.refund_amount > 0:
+            process_refund(instance)
+            instance.mark_refunded(amount=instance.refund_amount)
+
+   
+class ReturnRequestListAPIView(ListAPIView):
+    serializer_class = ReturnRequestSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        role = getattr(user, 'role', None)
+
+        if role == 'customer':
+            return ReturnRequest.objects.filter(user=user).order_by("-created_at")
+
+        elif user.is_staff or role == 'admin':
+            queryset = ReturnRequest.objects.all().order_by("-created_at")
+            status = self.request.query_params.get("status")
+            if status:
+                queryset = queryset.filter(status=status)
+            order_id = self.request.query_params.get("order_id")
+            if order_id:
+                queryset = queryset.filter(order__id=order_id)
+            return queryset
+
+        return ReturnRequest.objects.none()
+
+
+class ReturnRequestDetailAPIView(RetrieveAPIView):
+    serializer_class = ReturnRequestSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        role = getattr(user, 'role', None)
+
+        if role == 'customer':
+            return ReturnRequest.objects.filter(user=user)
+        elif user.is_staff or role == 'admin':
+            return ReturnRequest.objects.all()
+        return ReturnRequest.objects.none()
+
+
+class RefundStatusAPIView(APIView):
+    permission_classes = [IsAdminOrCustomer]
+
+    def get(self, request, order_id):
+        order = get_object_or_404(Order, id=order_id)
+
+        # Enforce object-level permission
+        self.check_object_permissions(request, order)
+
+        result = check_refund_status(order_id)
+
+        if not result.get("success"):
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(result, status=status.HTTP_200_OK)

@@ -8,6 +8,7 @@ const PaymentMethodSelector = ({ paymentMethod, setPaymentMethod }) => {
       <h2 className="font-semibold mb-2">Payment Method</h2>
 
       {methods.map((method) => (
+        
         <label key={method} className="flex items-center space-x-2 mb-1">
           <input
             type="radio"

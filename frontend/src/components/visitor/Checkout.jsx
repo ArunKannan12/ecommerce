@@ -46,17 +46,18 @@ const Checkout = () => {
         const minimalItems = JSON.parse(stored);
         const variantIds = minimalItems.map((i) => i.product_variant_id);
         const res = await axiosInstance.post("product-variants/bulk/", { variant_ids: variantIds });
-
         const enriched = res.data.map((variant) => {
           const localItem = minimalItems.find((i) => i.product_variant_id === variant.id);
           return {
             id: variant.id,
             product_variant_id: variant.id,
             quantity: localItem?.quantity || 1,
-            price: Number(variant.price || 0),
+            // ✅ pick offer_price/final_price
+            price: Number(variant.final_price ?? variant.offer_price ?? variant.base_price ?? 0),
             productName: variant.product_name || "Product",
             variantName: variant.variant_name || "Default",
-            imageUrl: variant.product_images?.[0] || "/placeholder.png",
+            // ✅ ensure safe fallback image
+            imageUrl: variant.images?.length > 0 ? variant.images[0].url : "/placeholder.png",
           };
         });
 
@@ -87,17 +88,15 @@ const Checkout = () => {
 
           const enriched = res.data.map((variant) => {
             const localItem = localCart.find((i) => i.product_variant_id === variant.id);
-            const basePrice = Number(variant.product_base_price ?? variant.price ?? 0);
-            const extraPrice = Number(variant.additional_price ?? 0);
-
+            
             return {
               id: variant.id,
               product_variant_id: variant.id,
               quantity: localItem?.quantity || 1,
-              price: basePrice + extraPrice,
+              price: Number(variant.final_price ?? variant.offer_price ?? variant.base_price ?? 0),
               productName: variant.product_name || "Product",
               variantName: variant.variant_name || "",
-              imageUrl: variant.product_images?.[0] || "/placeholder.png",
+              imageUrl: variant.images?.[0]?.url || "/placeholder.png",
             };
           });
 
@@ -107,6 +106,7 @@ const Checkout = () => {
         }
       }
     };
+    if (authLoading) return 
 
     setLoading(true);
     if (isAuthenticated) {
@@ -121,6 +121,8 @@ const Checkout = () => {
    * ------------------------ */
   useEffect(() => {
     const getVariantImage = (item) => {
+      
+      
       if (item.variant?.images?.length) return item.variant.images[0].url || "/placeholder.png";
       if (item.images?.length) return item.images[0].url || "/placeholder.png";
       if (item.product?.images?.length) return item.product.images[0].url || "/placeholder.png";
@@ -130,7 +132,7 @@ const Checkout = () => {
     let items = [];
 
     if (buyNowItems.length) {
-      items = buyNowItems.map((item) => ({
+      items = buyNowItems.map((item) => ({     
         id: item.variant?.id || item.product_variant_id || item.id,
         product_variant_id: item.variant?.id || item.product_variant_id || item.id,
         productName: item.productName || item.product?.name || "Product",
@@ -156,7 +158,13 @@ const Checkout = () => {
         productName: item.productName || item.product?.name || "Product",
         variantName: item.variantName || item.variant?.variant_name || "",
         quantity: item.quantity || 1,
-        price: item.price,
+        price: Number(
+            item.final_price ??
+            item.offer_price ??
+            item.base_price ??
+            item.price ??
+            0
+          ),
         imageUrl: getVariantImage(item),
       }));
     }
@@ -174,7 +182,7 @@ const Checkout = () => {
       try {
         const payload = {
           items: cartItems.map((item) => ({
-            product_variant_id: item.id,
+            product_variant_id: item.product_variant_id,
             quantity: item.quantity,
           })),
           postal_code: selectedAddress.postal_code,
@@ -240,6 +248,8 @@ const Checkout = () => {
           ? { shipping_address_id: selectedAddress.id }
           : { shipping_address: cleanAddress }),
       };
+      console.log(payload,'payload');
+      
 
       const res = await axiosInstance.post(endpoint, payload);
       const orderId = res.data.order?.id || res.data.id;
@@ -283,10 +293,10 @@ const Checkout = () => {
   if (loading || authLoading) return <p className="p-6">Loading cart...</p>;
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Checkout</h1>
+    <div className="max-w-5xl mx-auto p-6 space-y-6">
+      <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
       {cartItems.length === 0 ? (
-        <p>Your cart is empty</p>
+        <p className="text-gray-600">Your cart is empty</p>
       ) : (
         <>
           <CartItemList cartItems={cartItems} />

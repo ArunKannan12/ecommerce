@@ -7,8 +7,8 @@ const CheckoutSummary = ({ subtotal = 0, deliveryCharge = 0, totalAmount = 0, on
 
   
   return (
-    <div className="mt-8 border-t pt-6">
-      <h2 className="text-xl font-semibold text-gray-800 mb-4">Order Summary</h2>
+    <div className="mt-8 border-t pt-6 px-4 pb-8 sm:px-6">
+      <h2 className="text-xl font-semibold text-gray-800  mb-3">Order Summary</h2>
 
       {/* Subtotal */}
       <div className="flex justify-between items-center mb-4">
@@ -23,7 +23,7 @@ const CheckoutSummary = ({ subtotal = 0, deliveryCharge = 0, totalAmount = 0, on
       </div>
 
       {/* Total */}
-      <div className="flex justify-between items-center border-t pt-4">
+      <div className="flex justify-between items-center border-t pt-4 mb-6">
         <span className="text-lg font-semibold text-gray-700">Total</span>
         <span className="text-lg font-bold text-gray-900">₹{safeTotal.toFixed(2)}</span>
       </div>
@@ -31,11 +31,12 @@ const CheckoutSummary = ({ subtotal = 0, deliveryCharge = 0, totalAmount = 0, on
       {/* Place Order button */}
       <button
         onClick={onPlaceOrder}
-        className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded transition"
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded transition"
       >
         Place Order
       </button>
     </div>
+
   );
 };
 

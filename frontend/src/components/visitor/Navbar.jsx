@@ -2,45 +2,18 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, ChevronDown, User } from "lucide-react";
 import { useGetCartQuery } from "../../contexts/cartSlice";
-import MobileMenu from "./MobileMenu";
 import { useAuth } from "../../contexts/authContext";
+import { useCartCount } from "../../utils/useCartCount";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [guestCount, setGuestCount] = useState(0);
   const debounceTimeout = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, logout } = useAuth();
 
-  const { data: cartData } = useGetCartQuery(undefined, {
-    skip: !isAuthenticated,
-    refetchOnMountOrArgChange: true,
-  });
-
-  const authCartCount = isAuthenticated
-    ? cartData?.reduce((sum, item) => sum + (item.quantity || 0), 0)
-    : 0;
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      const updateGuestCount = () => {
-        const cart = JSON.parse(localStorage.getItem("cart")) || [];
-        const total = cart.reduce((sum, item) => sum + (item.quantity || 0), 0);
-        setGuestCount(total);
-      };
-      updateGuestCount();
-      window.addEventListener("storage", updateGuestCount);
-      window.addEventListener("cartUpdated", updateGuestCount);
-      return () => {
-        window.removeEventListener("storage", updateGuestCount);
-        window.removeEventListener("cartUpdated", updateGuestCount);
-      };
-    }
-  }, [isAuthenticated]);
-
-  const totalItems = isAuthenticated ? authCartCount : guestCount;
+  const totalItems = useCartCount();
 
   useEffect(() => {
     if (location.pathname.startsWith("/store")) {
@@ -78,8 +51,8 @@ const Navbar = () => {
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200">
-      <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-5">
-        <Link to="/" className="text-2xl font-bold text-gray-800">MyStore</Link>
+      <div className="w-full px-6 md:px-12 lg:px-20 xl:px-32 py-5 flex items-center justify-between">
+        <Link to="/" className="text-2xl font-bold text-gray-800">Beston</Link>
 
         <div className="flex-grow max-w-lg mx-auto px-4">
           <form onSubmit={handleSearchSubmit} className="flex items-center border border-gray-300 rounded-full overflow-hidden shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-all">
@@ -131,20 +104,8 @@ const Navbar = () => {
 
             {!isAuthenticated && <Link to="/login">Login</Link>}
           </div>
-
-          <button className="md:hidden" onClick={() => setIsOpen(!isOpen)}>
-            {isOpen ? <X size={28} /> : <Menu size={28} />}
-          </button>
         </div>
       </div>
-
-      <MobileMenu
-        isOpen={isOpen}
-        setIsOpen={setIsOpen}
-        isAuthenticated={isAuthenticated}
-        totalItems={totalItems}
-        logout={logout}
-      />
     </nav>
   );
 };

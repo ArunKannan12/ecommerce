@@ -25,8 +25,13 @@ from .views import (
     ShippingAddressListCreateView,
     ShippingAddressRetrieveUpdateDestroyView,
 
-    # Refund and delivery
-    RefundStatusAPIView,
+    # Return request flows
+    ReturnRequestCreateAPIView,
+    ReturnRequestUpdateAPIView,
+    ReturnRequestListAPIView,
+    ReturnRequestDetailAPIView,
+
+    RefundStatusAPIView
    
 )
 
@@ -45,8 +50,7 @@ urlpatterns = [
     path('orders/<int:id>/cancel/', CancelOrderAPIView.as_view(), name='orders-cancel'),
     path('orders/<int:id>/razorpay/', RazorpayOrderCreateAPIView.as_view(), name='orders-razorpay-create'),
     path('orders/razorpay/verify/', RazorpayPaymentVerifyAPIView.as_view(), name='orders-razorpay-verify'),
-    path('orders/<int:id>/refund-status/', RefundStatusAPIView.as_view(), name='orders-refund-status'),
-
+    
     # 🚚 Warehouse Item APIs
     path('items/', OrderItemListAPIView.as_view(), name='items-list'),
     path('items/<int:id>/pick/', PickOrderItemAPIView.as_view(), name='items-pick'),
@@ -57,4 +61,16 @@ urlpatterns = [
     path('shipping-addresses/', ShippingAddressListCreateView.as_view(), name='shipping-addresses-list-create'),
     path('shipping-addresses/<int:id>/', ShippingAddressRetrieveUpdateDestroyView.as_view(), name='shipping-addresses-detail'),
 
-   ]
+   # Customer creates a return request
+    path("returns/create/", ReturnRequestCreateAPIView.as_view(), name="return-create"),
+
+    # Admin (or staff) updates return status (approve/reject/refunded etc.)
+    path("returns/<int:pk>/update/", ReturnRequestUpdateAPIView.as_view(), name="return-update"),
+
+    # List of return requests (customer → their own, admin → all)
+    path("returns/", ReturnRequestListAPIView.as_view(), name="return-list"),
+
+    # Details of a single return request
+    path("returns/<int:pk>/", ReturnRequestDetailAPIView.as_view(), name="return-detail"),
+    path("refund-status/<int:order_id>/", RefundStatusAPIView.as_view(), name="refund-status"),
+]

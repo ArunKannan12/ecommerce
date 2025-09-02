@@ -2,6 +2,7 @@
 import React, { Suspense, lazy } from "react";
 import { createBrowserRouter } from "react-router-dom";
 import ProtectedRoutes from "./ProtectedRoutes";
+import LoadingScreen from "../components/helpers/LoadinScreen";
 
 // 🔄 Lazy-loaded components
 const VisitorHomePage = lazy(() => import("../components/visitor/VisitorHomePage"));
@@ -16,7 +17,7 @@ const LoginAndSignup = lazy(() => import("../components/visitor/LoginAndSignup")
 const About = lazy(() => import("../components/visitor/About"));
 
 const CustomerDashboard = lazy(() => import("../components/customer/CustomerDashboard"));
-const AdminDashboard = lazy(() => import("../components/admindashboard/AdminDashboard"));
+const AdminDashboard=lazy(()=>import("../components/admin/AdminDashboard") )
 const InvestorDashboard = lazy(() => import("../components/investor/InvestorDashboard"));
 const PromoterDashboard = lazy(() => import("../components/promoter/PromoterDashboard"));
 const WarehouseDashboard = lazy(() => import("../components/warehousestaff/WarehouseDashboard"));
@@ -33,7 +34,7 @@ const Profile = lazy(() => import("../components/visitor/Profile"));
 
 // 🌀 Suspense wrapper
 const withSuspense = (Component) => (
-  <Suspense fallback={<div>Loading...</div>}>
+  <Suspense fallback={<LoadingScreen/>}>
     {Component}
   </Suspense>
 );

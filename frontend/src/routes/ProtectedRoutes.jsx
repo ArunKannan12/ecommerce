@@ -7,7 +7,7 @@ const ProtectedRoutes = ({ allowedRoles }) => {
   const location = useLocation();
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <div>Loadin...</div>;
   }
 
   if (!isAuthenticated) {

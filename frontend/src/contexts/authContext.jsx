@@ -38,8 +38,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await axiosInstance.get("auth/users/me/");
       setUser(res.data);
-      console.log('data from context',res.data);
-      
+           
       setIsAuthenticated(true);
       return res.data;
     } catch (error) {
@@ -107,7 +106,13 @@ export const AuthProvider = ({ children }) => {
         await syncGuestcart(mergeGuestCart, guestCart);
       }
 
-      return { success: true, from: redirectFrom };
+      let redirectPath = redirectFrom || '/';
+      if (user.role === "admin") {
+        redirectPath = "/admin/dashboard";
+      } else if (user.role === "customer" && redirectFrom === '/') {
+        redirectPath = "/";
+      }
+      return { success: true, from: redirectPath };
     } catch (err) {
       console.error("Login failed", err);
       toast.error("Login failed. Please check your credentials.");

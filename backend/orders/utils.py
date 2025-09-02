@@ -12,6 +12,9 @@ from .models import Order, OrderItem, ShippingAddress
 from products.models import ProductVariant
 from promoter.models import Promoter
 from cart.models import CartItem
+import razorpay
+from django.conf import settings
+
 
 
 from .serializers import OrderSerializer
@@ -51,6 +54,7 @@ def get_valid_promoter(referral_code):
 
 def validate_payment_method(method):
     """Validate payment method."""
+    print(method)
     if method not in ["Cash on Delivery", "Razorpay"]:
         raise ValidationError({"payment_method": "Invalid payment method."})
     return method
@@ -219,3 +223,97 @@ def calculate_order_totals(items, shipping_address=None):
     total = subtotal + delivery_charge
 
     return {"subtotal": subtotal, "delivery_charge": delivery_charge, "total": total}
+
+
+
+def process_refund(obj, amount=None):
+    """
+    Handles refund for both Order and ReturnRequest objects.
+    obj: Order or ReturnRequest instance
+    amount: optional, defaults to obj.total (Order) or obj.refund_amount (ReturnRequest)
+    """
+    if amount is None:
+        amount = getattr(obj, 'total', None) or getattr(obj, 'refund_amount', 0)
+
+    payment_method = getattr(obj, 'payment_method', '').lower()
+    user = getattr(obj, 'user', None)
+
+    # --- Razorpay Refund ---
+    if payment_method == "razorpay":
+        payment_id = getattr(obj, 'razorpay_payment_id', None)
+        if not payment_id:
+            raise ValidationError("No Razorpay payment ID available for refund.")
+
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
+        try:
+            # Create refund in Razorpay
+            refund = client.payment.refund(payment_id, {"amount": int(amount * 100)})
+
+            # Store refund details
+            obj.is_refunded = True
+            obj.refunded_at = timezone.now()
+            obj.refund_status = refund.get("status", "initiated")  # e.g. "processed", "failed", etc.
+            obj.refund_id = refund.get("id")                       # Razorpay refund id (rfnd_xxx)
+            obj.save(update_fields=["is_refunded", "refunded_at", "refund_status", "refund_id"])
+
+        except Exception as e:
+            obj.refund_status = "failed"
+            obj.save(update_fields=["refund_status"])
+            raise ValidationError(f"Refund failed: {str(e)}")
+
+    # --- COD / Manual Refund ---
+    elif payment_method in ["cod", "cash on delivery"]:
+        user_upi = getattr(user, "upi_id", None)
+
+        if user_upi:
+            print(f"Initiating COD refund of {amount} to {user_upi}")
+            obj.refund_status = "pending"  # until admin actually sends money manually
+        else:
+            obj.refund_status = "not_applicable"
+
+        obj.is_refunded = False
+        obj.refunded_at = None
+        obj.refund_id = None
+        obj.save(update_fields=["refund_status", "is_refunded", "refunded_at", "refund_id"])
+
+
+
+
+def check_refund_status(order_id):
+    client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+    try:
+        order = Order.objects.get(id=order_id)
+        if not order.refund_id:
+            return {"success": False, "message": "No refund initiated for this order"}
+        
+        refund = client.refund.fetch(order.refund_id)
+        status = refund.get("status", "unknown")
+        order.refund_status = status
+
+        if status == "processed" and not order.refund_finalized:
+            order.refund_finalized = True
+            order.refunded_at = timezone.now()
+
+        # Save all updated fields
+        order.save(update_fields=["refund_status", "refund_finalized", "refunded_at"])
+
+        message = (
+            "Refund Processed – may take 5–7 days to reflect in your account."
+            if status == "processed"
+            else "Refund is in progress. Please check back later."
+        )
+
+        return {
+            "success": True,
+            "refund_id": refund["id"],
+            "status": refund["status"],
+            "amount": refund["amount"] / 100,
+            "payment_id": refund["payment_id"],
+            "finalized": order.refund_finalized,
+            "message": message,
+        }
+    except Order.DoesNotExist:
+        return {"success": False, "message": "Order not found"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}

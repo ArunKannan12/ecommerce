@@ -66,30 +66,28 @@ def validate_payment_method(method):
 
 
 def prepare_order_response(order, razorpay_order=None):
-    """
-    Serialize order with subtotal, delivery charge, total.
-    Include Razorpay info if provided.
-    """
     from .serializers import OrderSerializer
     from django.conf import settings
 
-    data = OrderSerializer(order).data
-    data.update({
+    order_data = OrderSerializer(order).data
+    order_data.update({
         "subtotal": str(order.subtotal),
         "delivery_charge": str(order.delivery_charge),
         "total": str(order.total)
     })
 
+    response = {"order": order_data}
+
     if razorpay_order:
-        return {
-            "order_id": razorpay_order.get("id"),
+        response.update({
+            "razorpay_order_id": razorpay_order.get("id"),
             "razorpay_key": settings.RAZORPAY_KEY_ID,
             "amount": razorpay_order.get("amount"),
             "currency": razorpay_order.get("currency"),
-            "order": data
-        }
+        })
 
-    return data
+    return response
+
 
 
 def calculate_order_preview(items, postal_code=None, shipping_address_id=None):

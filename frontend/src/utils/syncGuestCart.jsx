@@ -17,7 +17,7 @@ export const syncGuestcart = async (mergeGuestCart, itemsToMerge = null, refetch
     const localCart = JSON.parse(localStorage.getItem("cart") || "[]");
     const buyNowItems = JSON.parse(sessionStorage.getItem("buyNowMinimal") || "[]");
     cartItems = [...localCart, ...buyNowItems];
-    console.log("[SyncGuestCart] Loaded items from storage:", cartItems);
+    
   } else {
     console.log("[SyncGuestCart] Items provided for merge:", cartItems);
   }
@@ -41,15 +41,15 @@ export const syncGuestcart = async (mergeGuestCart, itemsToMerge = null, refetch
     }));
 
     const payload = { items: formattedItems };
-    console.log("[SyncGuestCart] Payload to backend:", payload);
+    
 
     const response = await mergeGuestCart(payload).unwrap();
-    console.log("[SyncGuestCart] Merge response:", response);
+   
 
     // Clear storage
     localStorage.removeItem("cart");
     sessionStorage.removeItem("buyNowMinimal");
-    console.log("[SyncGuestCart] Cleared guest storage after merge");
+    
 
     const { merged_items = [], skipped_items = [], failed_items = [] } = response;
 

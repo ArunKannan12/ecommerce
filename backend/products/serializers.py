@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Product, ProductVariant, ProductVariantImage
+from .models import Category, Product, ProductVariant, ProductVariantImage,Banner
 
 
 # -------------------- CATEGORY --------------------
@@ -61,18 +61,44 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             'promoter_commission_rate',
             'images',
 
-            # new fields
+            # parent product info
             'product_id',
             'product_name',
             'product_slug',
             'product_category',
-        ]
 
+            # return/replacement info
+            'is_returnable',
+            'return_days',
+            'is_replacement_only',
+            'replacement_days',
+        ]
     def get_final_price(self, obj):
         # Use offer_price if available and less than base_price, otherwise base_price
         if obj.offer_price and obj.offer_price < obj.base_price:
             return obj.offer_price
         return obj.base_price
+    
+    def validate(self, attrs):
+        # Enforce that both returnable and replacement_only cannot be True
+        if attrs.get('is_returnable') and attrs.get('is_replacement_only'):
+            raise serializers.ValidationError("A product cannot be both returnable and replacement-only.")
+
+        # Return days validation
+        if attrs.get('is_returnable'):
+            if not attrs.get('return_days') or attrs['return_days'] <= 0:
+                raise serializers.ValidationError("Return days must be greater than 0 if the product is returnable.")
+        else:
+            attrs['return_days'] = None
+
+        # Replacement days validation
+        if attrs.get('is_replacement_only'):
+            if not attrs.get('replacement_days') or attrs['replacement_days'] <= 0:
+                raise serializers.ValidationError("Replacement days must be greater than 0 if the product allows replacement.")
+        else:
+            attrs['replacement_days'] = None
+
+        return attrs
 
 # -------------------- PRODUCT --------------------
 class ProductSerializer(serializers.ModelSerializer):
@@ -102,3 +128,15 @@ class ProductSerializer(serializers.ModelSerializer):
         elif obj.image:
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
+
+
+class BannerSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Banner
+        fields = ["id", "title", "subtitle", "image_url", "link_url", "order", "is_active"]
+
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+        return request.build_absolute_uri(obj.image.url) if obj.image else None

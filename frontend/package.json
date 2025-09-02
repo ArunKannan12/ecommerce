@@ -8,15 +8,16 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "build": "vite build && echo '/* /index.html 200' > dist/_redirects"
-
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.7",
     "@react-oauth/google": "^0.12.2",
     "@reduxjs/toolkit": "^2.8.2",
     "@tailwindcss/vite": "^4.1.11",
     "axios": "^1.11.0",
     "bootstrap": "^5.3.7",
-    "lucide-react": "^0.539.0",
+    "framer-motion": "^12.23.12",
+    "lucide-react": "^0.542.0",
     "react": "^19.1.1",
     "react-bootstrap": "^2.10.10",
     "react-dom": "^19.1.1",
@@ -42,5 +43,4 @@
     "tailwindcss": "^4.1.11",
     "vite": "^7.1.0"
   }
- 
 }

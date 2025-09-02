@@ -4,6 +4,10 @@ import { toast } from "react-toastify";
 import axiosInstance from "../../api/axiosinstance";
 import { handleRazorpayPayment } from "../../utils/payment";
 import { useAuth } from "../../contexts/authContext";
+import CancelReasonModal from "../helpers/CancelReasonModal";
+import OrderDetailShimmer from "../../shimmer/OrderDetailShimmer";
+import OrderTracker from "./OrderTracker";
+
 
 const OrderDetail = () => {
   const { id: orderId } = useParams();
@@ -11,6 +15,7 @@ const OrderDetail = () => {
   const [order, setOrder] = useState(null);
   const [refund, setRefund] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   const { isAuthenticated, loading: authLoading } = useAuth();
 
@@ -27,7 +32,7 @@ const OrderDetail = () => {
       try {
         const res = await axiosInstance.get(`orders/${orderId}/`);
         setOrder(res.data);
-
+               
         // Fetch refund status
         try {
           const refundRes = await axiosInstance.get(`orders/${orderId}/refund-status/`);
@@ -50,7 +55,7 @@ const OrderDetail = () => {
     fetchOrder();
   }, [orderId, isAuthenticated, authLoading, navigate]);
 
-  if (loading || authLoading) return <p className="p-6">Loading order...</p>;
+  if (loading || authLoading) return <OrderDetailShimmer/>;
   if (!order) return <p className="p-6">Order not found.</p>;
 
   const totalAmount = (order.items || []).reduce(
@@ -91,8 +96,7 @@ const OrderDetail = () => {
                 variant.images?.[0]?.url ||
                 variant.product_images?.[0] ||
                 "/placeholder.png";
-              console.log(imageUrl);
-              
+                         
               return (
                 <li
                   key={variant.id || `${item.id}-${idx}`}
@@ -168,12 +172,22 @@ const OrderDetail = () => {
           </span>
         </div>
 
-        <div className="flex justify-between mb-2">
-          <span className="text-gray-700">Order Status:</span>
-          <span className="font-medium text-gray-900">
-            {order.status || "Processing"}
-          </span>
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-3">Order Status</h2>
+          <OrderTracker
+              status={order.status}
+              timestamps={{
+                pending: order.created_at,
+                processing: order.paid_at,
+                shipped: order.shipped_at,
+                delivered: order.delivered_at,
+                cancelled: order.cancelled_at,
+                refunded: order.refunded_at,
+              }}
+            />
+
         </div>
+
       
 
 
@@ -220,58 +234,66 @@ const OrderDetail = () => {
         )}
       </div>
 
-      {/* Pay Now Button */}
-      {!order.is_paid && order.payment_method === "Razorpay" && (
-        <div className="text-right">
-          <button
-            onClick={async () => {
-              try {
-                await handleRazorpayPayment({
-                  orderId,
-                  onSuccess: async () => {
-                    const updated = await axiosInstance.get(`orders/${orderId}/`);
-                    setOrder(updated.data);
-                    toast.success("Payment successful");
-                  },
-                });
-              } catch (err) {
-                console.error(err);
-                toast.error(err.response?.data?.detail || "Failed to initiate payment");
-              }
-            }}
-            className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-          >
-            Pay Now
-          </button>
-        </div>
-      )}
+      {/* Order Actions */}
+{(!order.is_paid || (order.cancelable && order.status !== "cancelled")) && (
+  <div className="flex flex-col sm:flex-row justify-end gap-3 mt-4">
+    {/* Pay Now */}
+    {!order.is_paid && order.payment_method === "Razorpay" && (
+      <button
+        onClick={async () => {
+          try {
+            await handleRazorpayPayment({
+              orderId,
+              onSuccess: async () => {
+                const updated = await axiosInstance.get(`orders/${orderId}/`);
+                setOrder(updated.data);
+                toast.success("Payment successful");
+              },
+            });
+          } catch (err) {
+            console.error(err);
+            toast.error(err.response?.data?.detail || "Failed to initiate payment");
+          }
+        }}
+        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition w-full sm:w-auto"
+      >
+        Pay Now
+      </button>
+    )}
 
-      {/* Cancel Order Button */}
-      {order.cancelable && order.status !== "cancelled" && (
-        <div className="text-right mt-4">
-          <button
-            onClick={async () => {
-              const reason = prompt("Please enter a reason for cancellation:");
-              if (!reason) return toast.info("Cancellation aborted");
+    {/* Cancel Order */}
+    {order.cancelable && order.status !== "cancelled" && (
+      <button
+        onClick={() => setShowCancelModal(true)}   // ✅ wrap in arrow function
+        className="px-6 py-2 bg-red-600 text-white rounded-lg 
+        hover:bg-red-700 transition w-full sm:w-auto"
+      >
+        Cancel Order
+      </button>
+    )}
 
-              try {
-                const res = await axiosInstance.post(`orders/${orderId}/cancel/`, {
-                  cancel_reason: reason,
-                });
-                setOrder(res.data.order);
-                navigate("/orders");
-                                toast.success(res.data.message || "Order cancelled successfully");
-              } catch (err) {
-                console.error("Cancel failed:", err);
-                toast.error(err.response?.data?.message || "Failed to cancel order");
-              }
-            }}
-            className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
-          >
-            Cancel Order
-          </button>
-        </div>
-      )}
+    <CancelReasonModal
+    isOpen={showCancelModal}
+      onClose={() => setShowCancelModal(false)}
+      onConfirm={async (reason) => {
+        try {
+          const res = await axiosInstance.post(`orders/${orderId}/cancel/`, {
+            cancel_reason: reason,
+          });
+          setOrder(res.data.order);
+          navigate("/orders");
+          toast.success(res.data.message || "Order cancelled successfully");
+        } catch (err) {
+          console.error("Cancel failed:", err);
+          toast.error(err.response?.data?.message || "Failed to cancel order");
+        } finally {
+          setShowCancelModal(false);
+        }
+      }}
+    />
+  </div>
+)}
+
     </div>
   );
 };

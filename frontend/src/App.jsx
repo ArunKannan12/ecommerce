@@ -21,9 +21,10 @@ function App() {
           closeOnClick 
           rtl={false} 
           pauseOnFocusLoss 
-          draggable 
+          draggable={true}
+          draggablePercent={60}
           pauseOnHover 
-          theme="colored"
+          theme="light"
         />
       </AuthProvider>
     </GoogleOAuthProvider>

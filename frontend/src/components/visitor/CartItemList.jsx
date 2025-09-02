@@ -1,6 +1,8 @@
 import React from "react";
 
 const CartItemList = ({ cartItems }) => {
+  
+  
   if (!cartItems.length) return <p className="text-gray-500">Your cart is empty.</p>;
     
     

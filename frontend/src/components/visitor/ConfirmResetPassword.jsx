@@ -59,8 +59,8 @@ const ConfirmResetPassword = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gray-100">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-6">
+    <div className="pt-[80px] px-4 bg-gray-100 min-h-screen">
+      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-6 mx-auto">
         <h2 className="text-2xl font-semibold text-center text-blue-600 mb-6">
           Reset Password
         </h2>

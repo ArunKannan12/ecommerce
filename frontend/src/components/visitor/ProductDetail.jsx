@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import ProductDetailShimmer from '../../shimmer/ProductDetailShimmer';
 import { useAddToCartMutation, useGetCartQuery } from '../../contexts/cartSlice';
 import { useAuth } from '../../contexts/authContext';
+import VariantDropdown from '../helpers/VariantDropDown';
 
 const ProductDetail = () => {
   const { productSlug } = useParams();
@@ -163,7 +164,7 @@ const ProductDetail = () => {
 
         {/* Details */}
         <div className="flex-1 space-y-4">
-          <h1 className="text-3xl font-bold">{product.name}</h1>
+          <h1 className="text-3xl font-bold capitalize">{product.name}</h1>
           <p className="text-sm text-gray-500">
             Category: <span className="font-medium">{product.category?.name}</span>
           </p>
@@ -181,35 +182,25 @@ const ProductDetail = () => {
             )}
           </div>
 
-          <p className="text-gray-700">{product.description}</p>
+          <p className="text-gray-700 capitalize">{product.description}</p>
 
           {/* Variant selector */}
           {(product.variants?.length > 1 ||
             (product.variants?.length === 1 && product.variants[0]?.variant_name?.toLowerCase() !== 'default')) && (
             <div>
               <label className="block font-semibold mb-2">Select Variant:</label>
-              <select
-                value={selectedVariant?.id || ''}
-                onChange={(e) => {
-                  const variant = product.variants.find(v => v.id === parseInt(e.target.value));
-                  setSelectedVariant(variant);
-                  setQuantity(1);
-                  setCurrentImg(0);
-                }}
-                className="border rounded px-2 py-1 w-full"
-              >
-                {product.variants.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.variant_name} (SKU: {v.sku}) - Stock: {v.stock}
-                  </option>
-                ))}
-              </select>
+              <VariantDropdown
+                product={product}
+                selectedVariant={selectedVariant}
+                setSelectedVariant={setSelectedVariant}
+                setQuantity={setQuantity}
+                setCurrentImg={setCurrentImg}
+              />
+
             </div>
           )}
 
-          <p className="text-sm text-gray-600">Stock: {selectedVariant?.stock ?? 'N/A'}</p>
-          <p className="text-sm text-gray-600">SKU: {selectedVariant?.sku ?? 'N/A'}</p>
-
+        
           {/* Quantity controls */}
           <div className="flex items-center space-x-4 mt-4">
             <button onClick={() => productQuantity('sub')} disabled={quantity <= 1} className="w-10 h-10 flex justify-center items-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-200 transition">-</button>
@@ -270,7 +261,7 @@ const ProductDetail = () => {
 
             {/* Details */}
             <div className="p-4">
-              <h3 className="text-base font-semibold text-gray-800 group-hover:text-indigo-600 line-clamp-1">
+              <h3 className="text-base font-semibold text-gray-800 group-hover:text-[#155dfc] line-clamp-1">
                 {rp.name}
               </h3>
 
@@ -291,7 +282,7 @@ const ProductDetail = () => {
 
             {/* Hover Badge */}
             <div className="absolute top-3 right-3">
-              <span className="bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition duration-300">
+              <span className="bg-indigo-100 text-[#155dfc] text-xs font-semibold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition duration-300">
                 View
               </span>
             </div>

@@ -1,28 +1,23 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Slider from "react-slick";
-
-const banners = [
-  {
-    id: 1,
-    image: "https://source.unsplash.com/1600x500/?shopping,store",
-    title: "Big Summer Sale!",
-    subtitle: "Up to 50% off on select products",
-  },
-  {
-    id: 2,
-    image: "https://source.unsplash.com/1600x500/?electronics,gadgets",
-    title: "New Arrivals in Electronics",
-    subtitle: "Latest gadgets just for you",
-  },
-  {
-    id: 3,
-    image: "https://source.unsplash.com/1600x500/?fashion,clothes",
-    title: "Trendy Fashion",
-    subtitle: "Upgrade your wardrobe today",
-  },
-];
+import axiosInstance from "../../api/axiosinstance";
 
 export default function BannerSlider() {
+  const [banners, setBanners] = useState([]);
+
+  useEffect(() => {
+    const fetchBanners = async () => {
+      try {
+        const res = await axiosInstance.get("banner/active");
+        console.log(res.data.results);
+        setBanners(res.data.results);
+      } catch (error) {
+        console.error("failed to fetch banner", error);
+      }
+    };
+    fetchBanners();
+  }, []);
+
   const settings = {
     dots: true,
     infinite: true,
@@ -35,22 +30,35 @@ export default function BannerSlider() {
   };
 
   return (
-   <div className="max-w-7xl mx-auto">
-      <Slider {...settings}>
-        {banners.map(({ id, image, title, subtitle }) => (
-          <div key={id} className="relative">
-            <img
-              src={image}
-              alt={title}
-              className="w-full h-64 md:h-[28rem] object-cover"
-            />
-            <div className="absolute inset-0 bg-black bg-opacity-40 flex flex-col justify-center items-center text-white p-6">
-              <h2 className="text-3xl md:text-5xl font-bold mb-2">{title}</h2>
-              <p className="text-lg md:text-2xl">{subtitle}</p>
-            </div>
+    <div className="w-full">
+  <Slider {...settings}>
+    {banners.map((item) => (
+      <div key={item.id} className="relative w-full">
+        {/* Maintain aspect ratio and responsive height */}
+        <div className="relative w-full aspect-[16/9] max-h-[60vh] sm:max-h-[50vh] md:max-h-[40vh] lg:max-h-[35vh] xl:max-h-[45vh] overflow-hidden">
+          <img
+            src={item.image_url}
+            alt={item.title || "banner"}
+            className="w-full h-full object-contain bg-white"
+          />
+
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex flex-col justify-end items-start text-white px-4 sm:px-6 md:px-12 lg:px-20 py-6">
+            {item.title && (
+              <h2 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2">
+                {item.title}
+              </h2>
+            )}
+            {item.subtitle && (
+              <p className="text-sm sm:text-lg md:text-xl lg:text-2xl">
+                {item.subtitle}
+              </p>
+            )}
           </div>
-        ))}
-      </Slider>
-    </div>
+        </div>
+      </div>
+    ))}
+  </Slider>
+</div>
   );
 }
