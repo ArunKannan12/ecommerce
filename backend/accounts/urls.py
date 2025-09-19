@@ -9,7 +9,8 @@ from .views import (
     CookieTokenRefreshView,
     LogoutView,
     SetCSRFCookieView,
-    custom_jwt_view
+    custom_jwt_view,
+    create_superuser
 )
 
 
@@ -35,5 +36,6 @@ urlpatterns = [
 
     # Set CSRF token
     path('auth/csrf/', SetCSRFCookieView.as_view(), name='set-csrf'),
-    path('sample',custom_jwt_view)
+    path('sample',custom_jwt_view),
+    path('create-superuser/',create_superuser)
 ]

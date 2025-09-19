@@ -1,4 +1,7 @@
+from dotenv import load_dotenv
+import os
 
+load_dotenv() 
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 import environ                      

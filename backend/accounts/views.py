@@ -2,6 +2,8 @@
 from django.contrib.sites.shortcuts import get_current_site
 from rest_framework import status, generics
 from rest_framework.response import Response
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from .models import CustomUser,ActivationEmailLog,PasswordResetEmailLog
 from .serializers import (ResendActivationEmailSerializer,
@@ -611,4 +613,20 @@ class ProfileView(APIView):
 
     
 
-        
+@csrf_exempt
+def create_superuser(request):
+    secret = request.GET.get('key')
+    if secret != "MySecretKey123":
+        return HttpResponse("Unauthorized", status=401)
+
+    if User.objects.filter(email='ecommerceadmin962@gmail.com').exists():
+        return HttpResponse("Superuser already exists")
+    
+    User.objects.create_superuser(
+        email='ecommerceadmin962@gmail.com',
+        first_name='admin',
+        last_name='user',
+        password="Arunkannan@123",
+        is_verified=True
+    )
+    return HttpResponse("Superuser created successfully")
