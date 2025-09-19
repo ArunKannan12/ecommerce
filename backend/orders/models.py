@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.utils import timezone
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
+from .notificationModel import *
 
 User = get_user_model()
 phone_regex = RegexValidator(regex=r'^[6-9]\d{9}$', message="Enter a valid 10-digit phone number")
@@ -50,8 +51,10 @@ class Order(models.Model):
         ("initiated", "Initiated"),
         ("processed", "Processed"),
         ("failed", "Failed"),
+        ("refunded", "Refunded"),        # 👈 add this
         ("not_applicable", "Not Applicable"),
     ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     promoter = models.ForeignKey(Promoter, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     commission = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
@@ -84,7 +87,7 @@ class Order(models.Model):
     refund_id = models.CharField(max_length=100, blank=True, null=True)
     refund_status = models.CharField(max_length=50, choices=REFUND_STATUS_CHOICES,default='not_applicable')
     refunded_at = models.DateTimeField(blank=True, null=True)
-    
+    assigned_at=models.DateTimeField(null=True,blank=True)
     refund_finalized = models.BooleanField(default=False)
     # Razorpay
     razorpay_order_id = models.CharField(max_length=100, blank=True, null=True)
@@ -105,6 +108,27 @@ class Order(models.Model):
             self.is_restocked = True
             self.save(update_fields=['is_restocked'])
 
+    def mark_refunded(self, refund_id=None, finalized=False):
+        """
+        Mark the order as refunded and sync related fields.
+        """
+        self.is_refunded = True
+        self.refund_status = "refunded"
+        self.refund_finalized = finalized
+        self.refunded_at = timezone.now()
+        if refund_id:
+            self.refund_id = refund_id
+        self.save(
+            update_fields=[
+                "is_refunded",
+                "refund_status",
+                "refund_finalized",
+                "refunded_at",
+                "refund_id",
+                "updated_at",
+            ]
+        )
+        
     def save(self, *args, **kwargs):
         if self.pk:
             old = Order.objects.get(pk=self.pk)
@@ -129,7 +153,10 @@ class OrderItemStatus(models.TextChoices):
     PICKED = 'picked', 'Picked'
     PACKED = 'packed', 'Packed'
     SHIPPED = 'shipped', 'Shipped'
+    FAILED='failed','Failed'
+    OUT_FOR_DELIVERY='out_for_delivery','Out for Delivery'
     CANCELLED = 'cancelled', 'Cancelled'
+    DELIVERED='delivered','Delivered'
 
 
 class OrderItem(models.Model):
@@ -140,7 +167,9 @@ class OrderItem(models.Model):
     status = models.CharField(max_length=20, choices=OrderItemStatus.choices, default=OrderItemStatus.PENDING)
     packed_at = models.DateTimeField(null=True, blank=True)
     shipped_at = models.DateTimeField(null=True, blank=True)
-
+    failed_at = models.DateTimeField(null=True, blank=True)
+    out_for_delivery_at = models.DateTimeField(null=True, blank=True)
+    delivered_at=models.DateTimeField(null=True,blank=True)
     def __str__(self):
         return f"{self.quantity} × {self.product_variant} (Order #{self.order.id})"
 
@@ -166,7 +195,7 @@ class ReturnRequest(models.Model):
         ('rejected_pickup', 'Rejected at pickup'),
         ('damaged', 'Rejected - Damaged'),
     ]
-    
+
     DECISION_CHOICES = [
         ("pending", "Pending"),
         ("approved", "Approved"),
@@ -176,22 +205,27 @@ class ReturnRequest(models.Model):
 
     # Links
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='return_requests')
-    order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, null=True, blank=True, related_name='return_requests')
+    order_item = models.ForeignKey(
+        OrderItem, on_delete=models.CASCADE, null=True, blank=True, related_name='return_requests'
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='return_requests')
 
+    # Request details
     reason = models.TextField()
 
-    # High-level return flow
+    # Status tracking
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
 
     # Refund
     refund_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    refund_method = models.CharField(max_length=20, choices=REFUND_METHOD_CHOICES, default='razorpay')
-    user_upi = models.CharField(max_length=100,blank=True,default='')
+    refund_method = models.CharField(max_length=20, choices=REFUND_METHOD_CHOICES,default='razorpay')
+    user_upi = models.CharField(max_length=100, blank=True, default='')
 
     # Pickup by deliveryman
     pickup_status = models.CharField(max_length=20, choices=PICKUP_STATUS_CHOICES, default='pending')
-    pickup_verified_by = models.ForeignKey(DeliveryMan, null=True, blank=True, on_delete=models.SET_NULL, related_name='verified_returns')
+    pickup_verified_by = models.ForeignKey(
+        DeliveryMan, null=True, blank=True, on_delete=models.SET_NULL, related_name='verified_returns'
+    )
     pickup_comment = models.TextField(blank=True, null=True)
 
     # Warehouse decision
@@ -216,6 +250,24 @@ class ReturnRequest(models.Model):
             )
         ]
 
+    # --- Helpers ---
+    def get_max_refund(self):
+        """Calculate maximum refundable amount including delivery charge share."""
+        if not self.order_item:
+            return self.order.total or Decimal('0.00')
+
+        max_refund = (self.order_item.price or Decimal('0.00')) * self.order_item.quantity
+
+        if hasattr(self.order, "delivery_charge") and self.order.delivery_charge:
+            total_items_price = sum(item.price * item.quantity for item in self.order.orderitem_set.all())
+            if total_items_price > 0:
+                item_share_of_delivery = (
+                    (self.order_item.price * self.order_item.quantity / total_items_price) * self.order.delivery_charge
+                )
+                max_refund += item_share_of_delivery
+
+        return max_refund
+
     def mark_refunded(self, amount=None):
         if amount:
             self.refund_amount = amount
@@ -224,7 +276,7 @@ class ReturnRequest(models.Model):
         self.save(update_fields=['status', 'refunded_at', 'refund_amount'])
 
     def clean(self):
-        # Only one active return request per item
+        # Prevent multiple active requests per item
         if self.order_item:
             exists = ReturnRequest.objects.filter(
                 order_item=self.order_item
@@ -232,28 +284,128 @@ class ReturnRequest(models.Model):
             if exists:
                 raise ValidationError("A return is already in progress for this item.")
 
-        # Max refundable amount
-        max_refund = (
-            (self.order_item.price or Decimal('0.00')) * self.order_item.quantity
-            if self.order_item else self.order.total or Decimal('0.00')
-        )
-        if self.order_item and hasattr(self.order, "delivery_charge") and self.order.delivery_charge:
-            total_items_price = sum(item.price * item.quantity for item in self.order.orderitem_set.all())
-            if total_items_price > 0:
-                item_share_of_delivery = (self.order_item.price * self.order_item.quantity / total_items_price) * self.order.delivery_charge
-                max_refund += item_share_of_delivery
+        active_replacement = ReplacementRequest.objects.filter(
+            order_item=self.order_item
+        ).exclude(status__in=["delivered", "failed", "rejected"]).exists()
+        if active_replacement:
+            raise ValidationError("A replacement request already exists for this item.")
+
+        # Refund limit
+        if self.refund_amount and self.refund_amount > self.get_max_refund():
+            raise ValidationError({"refund_amount": f"Cannot exceed {self.get_max_refund()}."})
 
         # Require UPI for COD/manual/wallet refunds
         if self.refund_method in ['upi', 'manual', 'wallet']:
             if self.order.payment_method == 'Cash on Delivery' and not self.user_upi:
                 raise ValidationError({"user_upi": "UPI ID is required for COD/manual refunds."})
         else:
-            # Clear UPI if refund method does not require it
             self.user_upi = ""
 
         super().clean()
 
     def __str__(self):
         if self.order_item:
-            return f"ReturnRequest for Item #{self.order_item.id} in Order #{self.order.id}"
-        return f"ReturnRequest for Order #{self.order.id}"
+            return f"Return for Item #{self.order_item.id} in Order #{self.order.id}"
+        return f"Return for Order #{self.order.id}"
+
+
+class ReplacementRequest(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("shipped", "Shipped"),
+        ("delivered", "Delivered"),
+        ("failed", "Failed"),
+    ]
+
+    DECISION_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("escalated", "Escalated"),
+    ]
+
+    PICKUP_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('collected', 'Collected'),
+        ('rejected_pickup', 'Rejected at pickup'),
+        ('damaged', 'Rejected - Damaged'),
+    ]
+
+    # Links
+    new_order=models.OneToOneField(Order,on_delete=models.CASCADE,null=True,blank=True,related_name='replacement_origin')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="replacement_requests")
+    order_item = models.ForeignKey(
+        OrderItem, on_delete=models.CASCADE, null=True, blank=True, related_name="replacement_requests"
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="replacement_requests")
+
+    # Request details
+    reason = models.TextField()
+
+    # Status tracking
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+
+    # Pickup before replacement
+    pickup_status = models.CharField(max_length=20, choices=PICKUP_STATUS_CHOICES, default='pending')
+    pickup_verified_by = models.ForeignKey(
+        DeliveryMan, null=True, blank=True, on_delete=models.SET_NULL, related_name="verified_replacements"
+    )
+    pickup_comment = models.TextField(blank=True, null=True)
+
+    # Warehouse decision
+    warehouse_decision = models.CharField(max_length=20, choices=DECISION_CHOICES, default="pending")
+    warehouse_comment = models.TextField(blank=True, null=True)
+
+    # Admin decision
+    admin_decision = models.CharField(max_length=20, choices=DECISION_CHOICES, default="pending")
+    admin_comment = models.TextField(blank=True, null=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    shipped_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["order_item"],
+                condition=~models.Q(status__in=["delivered", "failed", "rejected"]),
+                name="unique_active_replacement_per_item",
+            )
+        ]
+
+    # --- Helpers ---
+    def mark_shipped(self):
+        self.status = "shipped"
+        self.shipped_at = timezone.now()
+        self.save(update_fields=["status", "shipped_at"])
+
+    def mark_delivered(self):
+        self.status = "delivered"
+        self.delivered_at = timezone.now()
+        self.save(update_fields=["status", "delivered_at"])
+
+    def clean(self):
+        # Prevent multiple active replacement requests per item
+        if self.order_item:
+            exists = ReplacementRequest.objects.filter(
+                order_item=self.order_item
+            ).exclude(pk=self.pk).exclude(status__in=["delivered", "failed", "rejected"]).exists()
+            if exists:
+                raise ValidationError("A replacement is already in progress for this item.")
+        
+        active_return = ReturnRequest.objects.filter(
+            order_item=self.order_item
+        ).exclude(status="refunded").exists()
+        if active_return:
+            raise ValidationError("A return request already exists for this item.")
+
+        super().clean()
+
+    def __str__(self):
+        if self.order_item:
+            return f"Replacement for Item #{self.order_item.id} in Order #{self.order.id}"
+        return f"Replacement for Order #{self.order.id}"

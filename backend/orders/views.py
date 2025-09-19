@@ -4,11 +4,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from rest_framework.filters import SearchFilter
 
-from django.db.models import Q
-
 from .serializers import (OrderSerializer,
-                          ReturnRequestSerializer,
-                        ShippingAddressSerializer,
+                          ShippingAddressSerializer,
                         CartCheckoutInputSerializer,
                         ReferralCheckoutInputSerializer,
                         OrderPreviewInputSerializer,
@@ -19,33 +16,27 @@ from .serializers import (OrderSerializer,
                         OrderDetailSerializer,
                         OrderSerializer)
 
-from rest_framework.generics import (ListAPIView,RetrieveAPIView,CreateAPIView,
-                                     UpdateAPIView,
-                                    ListCreateAPIView,
+from rest_framework.generics import (ListAPIView,RetrieveAPIView,ListCreateAPIView,
                                     RetrieveUpdateDestroyAPIView)
 
 from accounts.permissions import (IsCustomer,
                                 IsAdminOrCustomer,
-                                IsWarehouseStaffOrAdmin,
-                                IsAdmin,
-                                IsWarehouseStaff)
+                                IsWarehouseStaffOrAdmin)
 
-from delivery.permissions import IsDeliveryManOrAdmin,IsDeliveryMan
+from delivery.permissions import IsDeliveryManOrAdmin
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 from cart.models import CartItem
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
-from .models import Order,OrderItem,ShippingAddress,ReturnRequest
+from .models import Order,OrderItem,ShippingAddress
 from django.db import transaction
 import razorpay
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 import logging
 from .utils import (create_order_with_items,
-                    update_item_status,
-                    check_refund_status,
                     validate_payment_method,
                     process_refund)
 
@@ -54,8 +45,10 @@ from .helpers import( validate_shipping_address,
                     validate_promoter,
                     calculate_order_preview)
 
+
 from delivery.permissions import IsDeliveryManOrAdmin
 from django.db import models
+from rest_framework.filters import OrderingFilter
 
 
 def get_or_create_shipping_address(user, address_data):
@@ -312,30 +305,7 @@ class RazorpayPaymentVerifyAPIView(APIView):
         CartItem.objects.filter(cart__user=request.user).delete()
 
         return Response({"message": "Payment verified and order updated"})
-    
-class PickOrderItemAPIView(APIView):
-    permission_classes = [IsWarehouseStaffOrAdmin]
-
-    def post(self, request, id):
-        update_item_status(id, expected_status='pending', new_status='picked', user=request.user)
-        return Response({'message': 'Item marked as picked'}, status=200)
-
-
-class PackOrderItemAPIView(APIView):
-    permission_classes = [IsWarehouseStaffOrAdmin]
-
-    def post(self, request, id):
-        update_item_status(id, expected_status='picked', new_status='packed', user=request.user, timestamp_field='packed_at')
-        return Response({'message': 'Item marked as packed'}, status=200)
-
-
-class ShipOrderItemAPIView(APIView):
-    permission_classes = [IsWarehouseStaffOrAdmin]
-
-    def post(self, request, id):
-        update_item_status(id, expected_status='packed', new_status='shipped', user=request.user, timestamp_field='shipped_at')
-        return Response({'message': 'Item marked as shipped'}, status=200)
-    
+ 
 class OrderItemListAPIView(ListAPIView):
     permission_classes = [IsWarehouseStaffOrAdmin]
     serializer_class = OrderItemSerializer
@@ -482,29 +452,36 @@ class BuyNowAPIView(APIView):
 
         return Response(prepare_order_response(order, razorpay_order), status=status.HTTP_201_CREATED if not razorpay_order else status.HTTP_200_OK)
 
-
-    
-
 class OrderListAPIView(ListAPIView):
     serializer_class = CustomerOrderListSerializer
     permission_classes = [IsCustomer]
+    filter_backends = [OrderingFilter]
+    ordering_fields = ["created_at", "delivered_at", "updated_at"]
+    ordering = ["-created_at"]  # default: latest first
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Order.objects.filter(user=user).order_by("-created_at")
+        queryset = Order.objects.filter(user=user)
 
+        # Filter by status
         status_filter = self.request.query_params.get("status")
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
+        # Filter by refund status
+        refunded_filter = self.request.query_params.get("is_refunded")
+        if refunded_filter in ["true", "false"]:
+            queryset = queryset.filter(is_refunded=(refunded_filter == "true"))
+
+        # Filter by date range
         start_date = self.request.query_params.get("start")
         end_date = self.request.query_params.get("end")
         if start_date and end_date:
-            from django.utils.dateparse import parse_date
-            queryset = queryset.filter(created_at__date__range=(parse_date(start_date), parse_date(end_date)))
+            queryset = queryset.filter(
+                created_at__date__range=(parse_date(start_date), parse_date(end_date))
+            )
 
         return queryset
-
 
 class OrderPreviewAPIView(APIView):
     permission_classes = [IsCustomer]
@@ -518,105 +495,3 @@ class OrderPreviewAPIView(APIView):
         return Response(OrderPreviewOutputSerializer(result).data, status=status.HTTP_200_OK)
 
 
-class ReturnRequestCreateAPIView(CreateAPIView):
-    serializer_class = ReturnRequestSerializer
-    permission_classes = [IsCustomer]
-
-    def perform_create(self, serializer):
-        user = self.request.user
-        serializer.save(
-            user=user,
-            status="pending",
-            refund_amount=0
-        )
-
-
-class ReturnRequestUpdateAPIView(UpdateAPIView):
-    queryset = ReturnRequest.objects.all()
-    serializer_class = ReturnRequestSerializer
-
-    def get_permissions(self):
-        role = getattr(self.request.user, 'role', None)
-        if role == 'admin':
-            return [IsAdmin()]
-        elif role == 'warehouse_staff':
-            return [IsWarehouseStaff()]
-        elif role == 'deliveryman':
-            return [IsDeliveryMan()]
-        elif role == 'customer':
-            return [IsCustomer()]
-        return super().get_permissions()
-
-    def perform_update(self, serializer):
-        instance = serializer.save()
-        user = self.request.user
-        role = getattr(user, 'role', None)
-
-        if role == 'deliveryman' and instance.pickup_status == 'approved':
-            instance.pickup_verified_by = user
-            instance.save(update_fields=['pickup_status', 'pickup_verified_by', 'pickup_comment'])
-            return
-
-        elif role == 'warehouse_staff':
-            instance.warehouse_approved = bool(self.request.data.get('warehouse_approved', False))
-            instance.warehouse_comment = self.request.data.get('warehouse_comment', '')
-            instance.save(update_fields=['warehouse_approved', 'warehouse_comment'])
-            return
-
-        elif role == 'admin' and instance.status == "approved" and instance.refund_amount > 0:
-            process_refund(instance)
-            instance.mark_refunded(amount=instance.refund_amount)
-
-   
-class ReturnRequestListAPIView(ListAPIView):
-    serializer_class = ReturnRequestSerializer
-
-    def get_queryset(self):
-        user = self.request.user
-        role = getattr(user, 'role', None)
-
-        if role == 'customer':
-            return ReturnRequest.objects.filter(user=user).order_by("-created_at")
-
-        elif user.is_staff or role == 'admin':
-            queryset = ReturnRequest.objects.all().order_by("-created_at")
-            status = self.request.query_params.get("status")
-            if status:
-                queryset = queryset.filter(status=status)
-            order_id = self.request.query_params.get("order_id")
-            if order_id:
-                queryset = queryset.filter(order__id=order_id)
-            return queryset
-
-        return ReturnRequest.objects.none()
-
-
-class ReturnRequestDetailAPIView(RetrieveAPIView):
-    serializer_class = ReturnRequestSerializer
-
-    def get_queryset(self):
-        user = self.request.user
-        role = getattr(user, 'role', None)
-
-        if role == 'customer':
-            return ReturnRequest.objects.filter(user=user)
-        elif user.is_staff or role == 'admin':
-            return ReturnRequest.objects.all()
-        return ReturnRequest.objects.none()
-
-
-class RefundStatusAPIView(APIView):
-    permission_classes = [IsAdminOrCustomer]
-
-    def get(self, request, order_id):
-        order = get_object_or_404(Order, id=order_id)
-
-        # Enforce object-level permission
-        self.check_object_permissions(request, order)
-
-        result = check_refund_status(order_id)
-
-        if not result.get("success"):
-            return Response(result, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(result, status=status.HTTP_200_OK)

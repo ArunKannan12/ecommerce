@@ -67,7 +67,8 @@ const Store = () => {
   const handleCategorySelect = (slug) => {
     navigate(slug ? `/store/${slug}` : '/store');
   };
-
+  console.log(products);
+  
   return (
     <>
   {/* Custom animation keyframes */}
@@ -164,80 +165,63 @@ const Store = () => {
           {loadingProducts ? (
             <FeaturedShimmer />
           ) : products.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {products.map((product, i) => {
-                const variant = product.variants?.[0];
-                const finalPrice = parseFloat(variant?.final_price || "0");
-                const basePrice = parseFloat(variant?.base_price || "0");
-                const isDiscounted = basePrice > 0 && finalPrice < basePrice;
-                const discountPercent = isDiscounted
-                  ? Math.round(((basePrice - finalPrice) / basePrice) * 100)
-                  : 0;
+                const imageUrl = product.image_url || product.category?.image_url;
 
-                const imageUrl =
-                  product.image_url ||
-                  variant?.images?.[0]?.url
+                const prices = product.variants.map(v =>
+                  parseFloat(v.final_price || v.offer_price || v.base_price || "0")
+                );
+                const lowestPrice = prices.length > 0 ? Math.min(...prices) : null;
+
+                const isNew = new Date(product.created_at) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
                 return (
                   <div
                     key={product.id}
-                    className="bg-white rounded-2xl shadow-md
-                     overflow-hidden flex flex-col transition-all
-                      duration-300 hover:shadow-indigo-200 
-                    hover:scale-[1.03] cursor-pointer 
-                    z-0 animate-[fadeSlideUp_0.5s_ease_forwards] opacity-0"
+                    className="bg-white rounded-3xl shadow-lg overflow-hidden flex flex-col transition-all duration-300 hover:shadow-indigo-300 hover:scale-[1.025] cursor-pointer z-0 animate-[fadeSlideUp_0.5s_ease_forwards] opacity-0"
                     style={{ animationDelay: `${i * 100}ms` }}
                   >
                     <Link to={`/products/${product.slug}`} className="block group">
                       <div className="relative aspect-[4/3] overflow-hidden z-0">
                         <img
                           src={imageUrl}
-                          alt={variant?.images?.[0]?.alt_text || product.name}
+                          alt={product.name}
                           loading="lazy"
-                           className="w-full h-full object-cover transition-transform
-                            duration-300 sm:group-hover:scale-110"
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 "
                         />
                         {product.featured && (
-                          <span className="absolute top-2 left-2 bg-yellow-500 text-white text-[10px] font-bold
-                           uppercase tracking-wide px-2 py-1 rounded shadow">
+                          <span className="absolute top-2 left-2 bg-gradient-to-r from-yellow-500 to-yellow-400 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full shadow-md">
                             Featured
                           </span>
                         )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent 
-                        opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        {isNew && (
+                          <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] font-semibold uppercase px-2 py-1 rounded-full shadow-md">
+                            New
+                          </span>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                       </div>
 
-                      <div className="p-4 sm:p-5 flex flex-col flex-grow">
-                        <h3  className="text-base sm:text-lg font-semibold tracking-tight text-gray-900 truncate" title={product.name}>
+                      <div className="p-5 flex flex-col flex-grow">
+                        <h3
+                          className="text-sm sm:text-base md:text-base font-serif font-semibold tracking-wide text-gray-900 text-balance truncate capitalize"
+                          title={product.name}
+                        >
                           {product.name}
                         </h3>
 
-                        <div className="mt-2 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xl font-bold text-gray-900">
-                              ₹{finalPrice.toFixed(2)}
+                        {lowestPrice !== null && (
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="text-base sm:text-lg font-bold text-gray-900 drop-shadow-sm">
+                              From ₹{lowestPrice.toFixed(2)}
                             </span>
-                            {isDiscounted && (
-                              <span className="text-sm text-red-500 line-through">
-                                ₹{basePrice.toFixed(2)}
+                            {product.variants.length > 1 && (
+                              <span className="text-[10px] sm:text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-full shadow-sm">
+                                {product.variants.length} options
                               </span>
                             )}
                           </div>
-
-                          {isDiscounted && (
-                            <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full shadow-sm">
-                              {discountPercent}% OFF
-                            </span>
-                          )}
-                        </div>
-
-                        {variant?.stock === 0 && (
-                          <p className="mt-2 text-xs text-gray-500 font-medium">Out of stock</p>
-                        )}
-                        {variant?.stock > 0 && variant?.stock < 5 && (
-                          <p className="mt-2 text-xs text-red-600 font-medium">
-                            Only {variant.stock} left in stock!
-                          </p>
                         )}
                       </div>
                     </Link>

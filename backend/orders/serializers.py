@@ -7,6 +7,7 @@ from rest_framework.validators import UniqueTogetherValidator
 from promoter.models import Promoter
 from django.utils.timesince import timesince
 from django.utils import timezone
+from datetime import timedelta
 
 class ShippingAddressSerializer(serializers.ModelSerializer):
     class Meta:
@@ -28,6 +29,17 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
             )
         ]
 
+class OrderItemSerializer(serializers.ModelSerializer):
+    order_id = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all(), write_only=True)
+    product_variant = ProductVariantSerializer(read_only=True)
+    product_variant_id = serializers.PrimaryKeyRelatedField(queryset=ProductVariant.objects.all(), write_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'id', 'order_id', 'product_variant', 'product_variant_id',
+            'quantity', 'price', 'status', 'packed_at', 'shipped_at','delivered_at'
+        ]
 
 class OrderSerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSerializer(required=False)
@@ -41,8 +53,7 @@ class OrderSerializer(serializers.ModelSerializer):
         queryset=Promoter.objects.all(), write_only=True, required=False, allow_null=True
     )
     cancelled_by = serializers.StringRelatedField(read_only=True)
-    
-
+    items = OrderItemSerializer(many=True,source='orderitem_set',read_only=True)
     class Meta:
         model = Order
         fields = [
@@ -54,7 +65,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'cancel_reason', 'cancelled_at', 'cancelled_by', 'cancelled_by_role',
             'razorpay_order_id', 'razorpay_payment_id',
             'refund_id', 'refund_status', 'refunded_at',
-            'is_restocked', 'cancelable'
+            'is_restocked', 'cancelable','items'
         ]
         read_only_fields = [
             'status', 'subtotal', 'delivery_charge', 'total',
@@ -66,20 +77,9 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_cancelable(self, obj):
         return obj.status in ['pending', 'processing'] and obj.status != 'cancelled'
+    def get_items(self,obj):
+        return 
 
-
-class OrderItemSerializer(serializers.ModelSerializer):
-    order = OrderSerializer(read_only=True)
-    order_id = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all(), write_only=True)
-    product_variant = ProductVariantSerializer(read_only=True)
-    product_variant_id = serializers.PrimaryKeyRelatedField(queryset=ProductVariant.objects.all(), write_only=True)
-
-    class Meta:
-        model = OrderItem
-        fields = [
-            'id', 'order', 'order_id', 'product_variant', 'product_variant_id',
-            'quantity', 'price', 'status', 'packed_at', 'shipped_at'
-        ]
 
 
 class ShippingAddressInputSerializer(serializers.Serializer):
@@ -197,28 +197,34 @@ class OrderItemSimpleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product_variant', 'quantity', 'price', 'status']
+        fields = ['id', 'product_variant', 'quantity', 'price', 
+                  'status','packed_at','shipped_at','failed_at',
+                  'out_for_delivery_at','delivered_at']
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSerializer(read_only=True)
     promoter = PromoterSerializer(read_only=True)
-    items = OrderItemSimpleSerializer(source='orderitem_set', many=True, read_only=True)
+    items = serializers.SerializerMethodField()
     cancelable = serializers.SerializerMethodField()
     cancelled_by = serializers.StringRelatedField(read_only=True)
     refund_info=serializers.SerializerMethodField()
+    return_request = serializers.SerializerMethodField()
+    replacement_request = serializers.SerializerMethodField(read_only=True)
+    delivered_by = serializers.SerializerMethodField()
+
     class Meta:
         model = Order
         fields = [
             'id', 'shipping_address', 'status',
             'subtotal', 'delivery_charge', 'total',
-            'payment_method', 'is_paid', 'is_refunded',
+            'payment_method', 'is_paid', 'is_refunded', 'is_restocked',  # 👈 added here
             'tracking_number', 'shipped_at', 'delivered_at', 'paid_at',
             'created_at', 'updated_at', 'promoter', 'items',
             'cancel_reason', 'cancelled_at', 'cancelled_by',
             'razorpay_order_id', 'razorpay_payment_id',
-            'refund_id', 'refund_status', 'refunded_at', 
-            'cancelable','refund_info'
+            'refund_id', 'refund_status', 'refunded_at', 'refund_finalized',
+            'cancelable', 'refund_info', 'return_request','replacement_request','delivered_by'
         ]
 
     def get_cancelable(self, obj):
@@ -228,11 +234,12 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         if not obj.refund_id:
             return None
         
-        message = (
-            "Refund Processed – may take 5–7 days to reflect in your account."
-            if obj.refund_status == "processed"
-            else "Refund is in progress. Please check back later."
-        )
+        if obj.refund_status in ["processed", "refunded"]:
+            message = "Refund Processed – may take 5–7 days to reflect in your account."
+        elif obj.refund_status == "failed":
+            message = "Refund failed. Please contact support."
+        else:
+            message = "Refund is in progress. Please check back later."
 
         return {
             "refund_id": obj.refund_id,
@@ -242,6 +249,74 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             "message": message,
         }
 
+    def get_return_request(self, obj):
+        rr = obj.return_requests.first()  # first() directly returns the model instance or None
+        if not rr:
+            return []
+        return [{
+            "id": rr.id,
+            "status": rr.status,
+            "reason": rr.reason,
+            "pickup_status": rr.pickup_status,
+            "admin_decision": rr.admin_decision,
+            "warehouse_decision": rr.warehouse_decision,
+            "refund_amount": rr.refund_amount,
+            "refund_method": rr.refund_method,
+        }]
+
+    def get_replacement_request(self, obj):
+        rr = obj.replacement_requests.first()
+        if not rr:
+            return []
+        return [{
+            "id": rr.id,
+            "status": rr.status,
+            "reason": rr.reason,
+            "pickup_status": rr.pickup_status,
+            "admin_decision": rr.admin_decision,
+            "warehouse_decision": rr.warehouse_decision,
+            "shipped_at": rr.shipped_at,
+            "delivered_at": rr.delivered_at,
+        }]
+
+    def get_delivered_by(self, obj):   # 👈 method field implementation
+        if not obj.delivered_by:
+            return None
+        dm = obj.delivered_by
+        return {
+            "id": dm.id,
+            "name": str(dm.user),  # will call __str__ of User
+            "phone": dm.phone,
+            "vehicle_number": dm.vehicle_number,
+            "last_active": dm.last_active,
+            "joined_at": dm.joined_at,
+            "total_delivery":dm.total_deliveries,
+            "earnings":dm.earnings
+        }
+    
+    def get_items(self, obj):
+        result = []
+        delivered_at = obj.delivered_at
+        for item in obj.orderitem_set.all():
+            variant = item.product_variant
+            return_remaining_days = None
+            replacement_remaining_days = None
+
+            if delivered_at:
+                if variant.allow_return and variant.return_days:
+                    delta = (delivered_at + timedelta(days=variant.return_days)) - timezone.now()
+                    return_remaining_days = max(delta.days, 0)
+                if variant.allow_replacement and variant.replacement_days:
+                    delta = (delivered_at + timedelta(days=variant.replacement_days)) - timezone.now()
+                    replacement_remaining_days = max(delta.days, 0)
+
+            result.append({
+                **OrderItemSimpleSerializer(item).data,
+                "return_remaining_days": return_remaining_days,
+                "replacement_remaining_days": replacement_remaining_days,
+            })
+        return result
+    
 class OrderSummarySerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSummarySerializer(read_only=True)
     first_item = serializers.SerializerMethodField()
@@ -326,11 +401,10 @@ class OrderPreviewOutputSerializer(serializers.Serializer):
     delivery_charge = serializers.DecimalField(max_digits=10, decimal_places=2)
     total = serializers.DecimalField(max_digits=10, decimal_places=2)
 
-
 class OrderLightSerializer(serializers.ModelSerializer):
     class Meta:
-        model=Order
-        fields=['id','status','total','payment_method','created_at']
+        model = Order
+        fields = ['id','status','total','payment_method','created_at','is_paid','paid_at']
 
 class OrderitemLightSerializer(serializers.ModelSerializer):
     product_variant=ProductVariantSerializer(read_only=True)
@@ -339,182 +413,26 @@ class OrderitemLightSerializer(serializers.ModelSerializer):
         model=OrderItem
         fields=['id','quantity','price','status','product_variant']
 
-class ReturnRequestSerializer(serializers.ModelSerializer):
-    # --- Read-only representation fields ---
-    order = OrderLightSerializer(read_only=True)
-    order_item = OrderitemLightSerializer(read_only=True)
-    shipping_address=serializers.SerializerMethodField(read_only=True)
-    product = serializers.SerializerMethodField(read_only=True)
-    variant = serializers.SerializerMethodField(read_only=True)
-    variant_images = serializers.SerializerMethodField(read_only=True)
-    is_refunded = serializers.SerializerMethodField(read_only=True)
-    refunded_at_human = serializers.SerializerMethodField(read_only=True)
-    product_image = serializers.SerializerMethodField(read_only=True)
-    refund_method_display = serializers.SerializerMethodField(read_only=True)
-    delivery_charge=serializers.SerializerMethodField(read_only=True)
-    user_upi = serializers.CharField(required=False, allow_blank=True)
-    return_days_remaining = serializers.SerializerMethodField()
-    replacement_days_remaining = serializers.SerializerMethodField()
-    pickup_verified_by_name = serializers.SerializerMethodField(read_only=True)
-    pickup_status_display = serializers.SerializerMethodField(read_only=True)
-    warehouse_status_display = serializers.SerializerMethodField(read_only=True)
-    admin_status_display = serializers.SerializerMethodField(read_only=True)
 
-    # --- Accept these for creation ---
-    order_id = serializers.PrimaryKeyRelatedField(
-        queryset=Order.objects.all(), write_only=True
-    )
-    order_item_id = serializers.PrimaryKeyRelatedField(
-        queryset=OrderItem.objects.all(), write_only=True
-    )
+
+class WarehouseOrderItemSerializer(serializers.ModelSerializer):
+    order_id=serializers.SerializerMethodField()
+    product_name=serializers.SerializerMethodField()
+    variant_name=serializers.SerializerMethodField()
 
     class Meta:
-        model = ReturnRequest
-        fields = [
-            "id",
-            "order", "order_item",
-            "order_id", "order_item_id",
-            "product", "variant", "variant_images",
-            "reason", "status", "refund_amount", "user_upi",
-            "pickup_verified_by_name", "pickup_comment", "pickup_status_display",
-            "warehouse_comment", "warehouse_status_display",
-            "admin_comment", "admin_status_display",
-            "created_at", "updated_at", "refunded_at",
-            "refund_method", "refund_method_display",
-            'return_days_remaining','replacement_days_remaining',
-            "is_refunded", "refunded_at_human", "product_image","shipping_address",'delivery_charge'
+        model=OrderItem
+        fields=[
+            'id','order_id','product_name','variant_name',
+            'quantity','price','status','packed_at','shipped_at',
+            'failed_at','out_for_delivery_at'
         ]
 
-    def validate(self, attrs):
-        order_item = attrs.get('order_item_id')
-        if ReturnRequest.objects.filter(order_item=order_item).exclude(status='refunded').exists():
-            raise serializers.ValidationError("A return request is already in progress for this item.")
+    def get_order_id(self, obj):
+        return obj.order.id if obj.order else None
 
-        user = self.context['request'].user
-        if attrs['order_id'].user != user:
-            raise serializers.ValidationError("You can only request a return for your own orders.")
+    def get_product_name(self, obj):
+        return obj.product_variant.product.name if obj.product_variant and hasattr(obj.product_variant, 'product') else None
 
-        variant = order_item.product_variant
-        if not variant.is_returnable and not variant.is_replacement_only:
-            raise serializers.ValidationError('This product cannot be returned or replaced')
-        if variant.is_returnable and variant.is_replacement_only:
-            raise serializers.ValidationError("A product cannot be both returnable and replacement-only at the same time")
-
-        return attrs
-    
-    def get_return_days_remaining(self, obj):
-        variant = obj.order_item.product_variant
-        if not variant.is_returnable:
-            return 0
-        delta = (timezone.now().date() - obj.order.created_at.date()).days
-        remaining = variant.return_days - delta
-        return max(remaining, 0)
-
-    def get_replacement_days_remaining(self, obj):
-        variant = obj.order_item.product_variant
-        if not variant.is_replacement_only:
-            return 0
-        delta = (timezone.now().date() - obj.order.created_at.date()).days
-        remaining = variant.replacement_days - delta
-        return max(remaining, 0)
-
-    def create(self, validated_data):
-        order = validated_data.pop("order_id")
-        order_item = validated_data.pop("order_item_id")
-        validated_data.pop("refund_amount", None)
-
-        total_items_price = sum(item.price * item.quantity for item in order.orderitem_set.all())
-        item_share_of_delivery = 0
-        if hasattr(order, "delivery_charge") and order.delivery_charge:
-            item_share_of_delivery = (order_item.price * order_item.quantity / total_items_price) * order.delivery_charge
-
-        refund_amount = (order_item.price * order_item.quantity) + item_share_of_delivery
-
-        # Create instance but don't save yet
-        instance = ReturnRequest(
-            order=order,
-            order_item=order_item,
-            refund_amount=refund_amount,
-            **validated_data
-        )
-        # Validate the model
-        instance.full_clean()
-        # Save after validation
-        instance.save()
-        return instance
-
-    
-
-    def get_delivery_charge(self, obj):
-       
-        order = obj.order
-        order_item = obj.order_item
-
-        if not order or not order_item:
-            return 0
-
-        total_items_price = sum(item.price * item.quantity for item in order.orderitem_set.all())
-        if total_items_price == 0:
-            return 0
-
-        proportional_delivery = 0
-        if hasattr(order, "delivery_charge") and order.delivery_charge:
-            proportional_delivery = (order_item.price * order_item.quantity / total_items_price) * order.delivery_charge
-
-        return round(proportional_delivery, 2)
-
-
-    def get_shipping_address(self,obj):
-        if obj.order and hasattr(obj.order,"shipping_address") and obj.order.shipping_address:
-            return ShippingAddressSerializer(obj.order.shipping_address).data
-        return None
-    # ---- Custom Getters ----
-    def get_product(self, obj):
-        if obj.order_item and obj.order_item.product_variant:
-            return obj.order_item.product_variant.product.name
-        return None
-
-    def get_variant(self, obj):
-        if obj.order_item and obj.order_item.product_variant:
-            return obj.order_item.product_variant.variant_name
-        return None
-
-    def get_variant_images(self, obj):
-        if obj.order_item and obj.order_item.product_variant:
-            images = obj.order_item.product_variant.images.all()
-            return [img.url for img in images if img.url]
-        return []
-
-    def get_is_refunded(self, obj):
-        return obj.status == "refunded"
-
-    def get_refunded_at_human(self, obj):
-        if obj.refunded_at:
-            return timesince(obj.refunded_at) + " ago"
-        return None
-
-    def get_product_image(self, obj):
-        if obj.order_item and obj.order_item.product_variant:
-            product = obj.order_item.product_variant.product
-            if product.image_url:
-                return product.image_url
-            elif product.image:
-                return product.image.url
-        return None
-
-    def get_refund_method_display(self, obj):
-        return obj.get_refund_method_display() if obj.refund_method else None
-
-    def get_pickup_verified_by_name(self, obj):
-        if obj.pickup_verified_by and obj.pickup_verified_by.user:
-            return obj.pickup_verified_by.user.get_full_name() or obj.pickup_verified_by.user.email
-        return None
-
-    def get_pickup_status_display(self, obj):
-        return obj.get_pickup_status_display()
-
-    def get_warehouse_status_display(self, obj):
-        return obj.get_warehouse_decision_display()
-
-    def get_admin_status_display(self, obj):
-        return obj.get_admin_decision_display()
+    def get_variant_name(self, obj):
+        return obj.product_variant.variant_name if obj.product_variant else None

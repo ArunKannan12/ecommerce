@@ -13,9 +13,11 @@ urlpatterns = [
     path('api/',include('products.urls')),
     path('api/',include('cart.urls')),
     path('api/',include('orders.urls')),
+    path("api/", include('warehouse.urls')),
     path('api/',include('promoter.urls'),),
     path('api/',include('delivery.urls')),
     path("api/",include('investor.urls')),
+    path("api/",include('admin_dashboard.urls')),
     
 ]
 

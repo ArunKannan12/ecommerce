@@ -31,6 +31,7 @@ const ProductDetail = () => {
         const res = await axiosInstance.get(`products/${productSlug}/`);
         const data = res.data;
         setProduct(data);
+              
         if (data.variants?.length > 0) setSelectedVariant(data.variants[0]);
 
         const relatedRes = await axiosInstance.get(`products/${productSlug}/related/`);
@@ -182,7 +183,19 @@ const ProductDetail = () => {
             )}
           </div>
 
-          <p className="text-gray-700 capitalize">{product.description}</p>
+          <div className="space-y-1">
+            {selectedVariant?.description?.trim() ? (
+              <>
+                <span className="font-semibold text-gray-900">About this variant:</span>
+                <p className="text-gray-700">{selectedVariant.description}</p>
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-gray-900">About this product:</span>
+                <p className="text-gray-700">{product.description}</p>
+              </>
+            )}
+          </div>
 
           {/* Variant selector */}
           {(product.variants?.length > 1 ||
@@ -207,6 +220,28 @@ const ProductDetail = () => {
             <span className="min-w-[30px] text-center text-lg font-medium">{quantity}</span>
             <button onClick={() => productQuantity('add')} className="w-10 h-10 flex justify-center items-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-200 transition">+</button>
           </div>
+
+                    {/* Return & Replacement Info */}
+          {selectedVariant && (selectedVariant.allow_return || selectedVariant.allow_replacement) && (
+            <div className="mt-6 bg-gray-50 border rounded-xl p-4 sm:p-5 text-sm text-gray-700 space-y-2">
+              <h3 className="text-base font-semibold text-gray-800 mb-2">Return & Replacement Policy</h3>
+              <ul className="list-disc list-inside space-y-1">
+                {selectedVariant.allow_return && (
+                  <li>
+                    <span className="font-medium text-gray-900">Return available:</span> within {selectedVariant.return_days} days of delivery
+                  </li>
+                )}
+                {selectedVariant.allow_replacement && (
+                  <li>
+                    <span className="font-medium text-gray-900">Replacement available:</span> within {selectedVariant.replacement_days} days of delivery
+                  </li>
+                )}
+              </ul>
+              <p className="text-xs text-gray-500 mt-2">
+                Please ensure the item is unused and in original packaging to be eligible.
+              </p>
+            </div>
+          )}
 
           {/* Cart / Buy Now */}
           <div className="flex gap-4 mt-6">

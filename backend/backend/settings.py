@@ -39,12 +39,14 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'accounts',
+    'admin_dashboard',
     'products',
     'cart',
     'orders',
     'promoter',
     'delivery',
     'investor',
+    'warehouse',
     'djoser',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
@@ -258,15 +260,15 @@ DJOSER = {
     'USER_ID_FIELD': 'email',
     'PASSWORD_RESET_URL': '/password/reset/',
     'SERIALIZERS': {
-        'user_create': 'accounts.serializers.UserSerializer',
+        'user_create': 'accounts.serializers.BaseUserSerializer',  # For creation
         'user_login': 'accounts.serializers.UserLoginSerializer',
         'password_reset': 'accounts.serializers.CustomPasswordResetSerializer',
         'password_reset_confirm': 'accounts.serializers.CustomPasswordResetConfirmSerializer',
         'password_change': 'accounts.serializers.CustomPasswordChangeSerializer',
-        'user': 'accounts.serializers.UserSerializer',
+        'user': 'accounts.serializers.RoleBasedUserSerializer',       # role-based
+        'current_user': 'accounts.serializers.RoleBasedUserSerializer', # role-based
         'user_delete': 'djoser.serializers.UserDeleteSerializer',
-        'current_user': 'accounts.serializers.UserSerializer',
-        "set_password": "accounts.serializers.CustomSetPasswordSerializer",
+        'set_password': 'accounts.serializers.CustomSetPasswordSerializer',
     },
 }
 
@@ -312,15 +314,26 @@ CSRF_HEADER_NAME = "X-CSRFToken"
 
 
 
-# Email settings for MailHog (local testing)
-EMAIL_USE_SSL = False
+# # Email settings for MailHog (local testing)
+# EMAIL_USE_SSL = False
+# EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# EMAIL_HOST = "smtp.gmail.com"
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+# EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+# DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
+
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
+EMAIL_HOST = "localhost"
+EMAIL_PORT = 1025
+EMAIL_HOST_USER = ""
+EMAIL_HOST_PASSWORD = ""
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = False
+DEFAULT_FROM_EMAIL = "noreply@example.com"
+
+
 
 
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY=env("SOCIAL_AUTH_GOOGLE_OAUTH2_KEY")

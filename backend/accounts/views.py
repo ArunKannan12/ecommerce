@@ -8,10 +8,15 @@ from .serializers import (ResendActivationEmailSerializer,
                             CustomPasswordResetSerializer,
                             CustomPasswordResetConfirmSerializer,
                             FacebookLoginSerializer,
-                            
+                            CustomerProfileSerializer,
+                            PromoterProfileSerializer,
+                            InvestorProfileSerializer,
+                            BaseUserSerializer,
+                            DeliveryManProfileSerializer
                             )
 from django.middleware.csrf import get_token
-
+from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError
 import math
 from djoser.utils import encode_uid
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -304,7 +309,7 @@ class GoogleAuthView(APIView):
                 value=access_token,
                 httponly=True,
                 secure = not settings.DEBUG,
-                samesite='Lax',
+                samesite='None',
                 max_age=3600
             )
             response.set_cookie(
@@ -312,7 +317,7 @@ class GoogleAuthView(APIView):
                 value=refresh_token,
                 httponly=True,
                 secure = not settings.DEBUG,
-                samesite='Lax',
+                samesite='None',
                 max_age=7*24*60*60
 
             )
@@ -433,7 +438,7 @@ class FacebookLoginView(GenericAPIView):
                 value=access_token,
                 httponly=True,
                 secure = not settings.DEBUG,
-                samesite='Lax',
+                samesite='None',
                 max_age=3600
             )
         response.set_cookie(
@@ -441,7 +446,7 @@ class FacebookLoginView(GenericAPIView):
                 value=refresh_token,
                 httponly=True,
                 secure = not settings.DEBUG,
-                samesite='Lax',
+                samesite='None',
                 max_age=7*24*60*60,
                 path='/'
 
@@ -467,14 +472,14 @@ class CookieTokenRefreshView(TokenRefreshView):
             response = Response({'message': 'Token refreshed'}, status=status.HTTP_200_OK)
 
             response.set_cookie('access_token', new_access_token, httponly=True, secure=not settings.DEBUG,
-                                samesite='Lax', path='/', max_age=60 * 60)
+                                samesite='None', path='/', max_age=60 * 60)
             response.set_cookie('refresh_token', new_refresh_token, httponly=True, secure=not settings.DEBUG,
-                                samesite='Lax', path='/', max_age=7 * 24 * 60 * 60)
+                                samesite='None', path='/', max_age=7 * 24 * 60 * 60)
 
             # Refresh CSRF token
             csrf_token = get_token(request)
             response.set_cookie('csrftoken', csrf_token, httponly=False, secure=not settings.DEBUG,
-                                samesite='Lax', path='/', max_age=60 * 60)
+                                samesite='None', path='/', max_age=60 * 60)
 
             return response
 
@@ -514,14 +519,14 @@ class CookieTokenObtainPairView(TokenObtainPairView):
 
         # Set access token cookie
         res.set_cookie('access_token', access, httponly=True, secure=not settings.DEBUG,
-                   samesite='Lax', path='/', max_age=60 * 60)
+                   samesite='None', path='/', max_age=60 * 60)
         res.set_cookie('refresh_token', refresh, httponly=True, secure=not settings.DEBUG,
-                    samesite='Lax', path='/', max_age=7 * 24 * 60 * 60 if remember_me else None)
+                    samesite='None', path='/', max_age=7 * 24 * 60 * 60 if remember_me else None)
 
         # 🔐 Set CSRF token cookie
         csrf_token = get_token(request)
         res.set_cookie('csrftoken', csrf_token, httponly=False, secure=not settings.DEBUG,
-                    samesite='Lax', path='/', max_age=60 * 60)
+                    samesite='None', path='/', max_age=60 * 60)
 
         return res
 
@@ -565,3 +570,45 @@ def custom_jwt_view(request):
         "access_token": access_token,
         "refresh_token": refresh_token,
     })
+
+
+class ProfileView(APIView):
+    """
+    Retrieve or update the role-based profile of the authenticated user.
+    """
+
+    def get_serializer(self, user):
+        role = getattr(user, 'role', 'customer')
+        if role == 'customer':
+            return CustomerProfileSerializer
+        elif role == 'promoter':
+            return PromoterProfileSerializer
+        elif role == 'investor':
+            return InvestorProfileSerializer
+        elif role == 'deliveryman':
+            return DeliveryManProfileSerializer
+        elif role in ['admin', 'warehouse_staff']:
+            return BaseUserSerializer
+        else:
+            return BaseUserSerializer
+
+    def get(self, request):
+        serializer_class = self.get_serializer(request.user)
+        serializer = serializer_class(request.user)
+        return Response(serializer.data)
+
+    def put(self, request):
+        serializer_class = self.get_serializer(request.user)
+        serializer = serializer_class(
+            request.user, data=request.data, partial=True, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def patch(self, request):
+        return self.put(request)
+
+    
+
+        

@@ -4,7 +4,8 @@ from rest_framework.permissions import BasePermission,SAFE_METHODS
 
 class IsCustomer(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and getattr(request.user, 'role', '') == 'customer'
+        return (request.user.is_authenticated and
+                 getattr(request.user, 'role', '') == 'customer')
 
 
 class IsPromoter(BasePermission):
@@ -20,7 +21,7 @@ class IsInvestor(BasePermission):
 class IsAdmin(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and (
-            getattr(request.user, 'role', '') == 'admin' or request.user.is_superuser
+            getattr(request.user, 'role', '') == 'admin' or request.user.is_staff
         )
 class IsAdminOrCustomer(BasePermission):
     def has_permission(self, request, view):
@@ -36,14 +37,15 @@ class IsAdminOrPromoter(BasePermission):
 
 class IsWarehouseStaffOrAdmin(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and (
-            request.user.is_staff or getattr(request.user,'role','') in ['admin','warehouse_staff']
+        user=request.user
+        return user.is_authenticated and (
+            user.is_staff or getattr(user,'role',None) in ['admin','warehouse']
         )
     
 class IsWarehouseStaff(BasePermission):
     def has_permission(self, request, view):
         user=request.user
-        return user.is_authenticated and getattr(user,'role',None) == 'warehouse_staff'
+        return user.is_authenticated and getattr(user,'role',None) == 'warehouse'
      
 class IsInvestorOrAdmin(BasePermission):
     def has_permission(self, request, view):

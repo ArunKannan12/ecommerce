@@ -1,3 +1,5 @@
+#accounts app
+
 from djoser.serializers import PasswordResetConfirmSerializer,SetPasswordSerializer
 from .models import CustomUser
 from rest_framework import serializers
@@ -11,71 +13,35 @@ from django.contrib.auth.password_validation import validate_password
 from accounts.email import CustomPasswordResetEmail
 from rest_framework.views import APIView
 from rest_framework.response import Response
-
+from investor.serializers import InvestorSerializer
+from delivery.serializers import DeliveryManSerializer
+from promoter.serializers import PromoterSerializer
 
 User=get_user_model()
 
-class UserSerializer(serializers.ModelSerializer):
-    custom_user_profile = serializers.ImageField(required=False, allow_null=True)
-    password = serializers.CharField(write_only=True, required=False)
+class BaseUserSerializer(serializers.ModelSerializer):
+    profile_image=serializers.ImageField(source='custom_user_profile',read_only=True)
     class Meta:
-        model = CustomUser
+        model = User
         fields = [
-            'id', 'email', 'first_name', 'last_name', 'password','is_active','is_verified',
-            'custom_user_profile', 'social_auth_pro_pic',
-            'phone_number', 'address', 'pincode',
-            'district', 'city', 'state','auth_provider','role','last_login_ip','created_at'
+            'id', 'email', 'first_name', 'last_name',
+            'is_active', 'is_verified', 'role',
+            'profile_image',
+            'created_at'
         ]
-        read_only_fields = ['id', 'email', 'social_auth_pro_pic','last_login_ip','created_at'] 
-    
-    def validate(self, attrs):
-        password = attrs.get('password')
-        
-        if password:
-            user = self.instance or CustomUser(email=attrs.get('email', 'example@example.com'))
-            validate_password(password, user)
-        return attrs
-
-    def create(self, validated_data):
-        password = validated_data.pop('password', None)
-        profile_pic = validated_data.pop('custom_user_profile', None)
-
-        user = CustomUser(**validated_data)
-
-        if password:
-            user.set_password(password)
-        else:
-            user.set_unusable_password()
-
-        if profile_pic:
-            user.custom_user_profile = profile_pic
-
-        user.save()
-
-        # Optional: Send custom activation email
-        request = self.context.get("request")
-        from djoser.email import ActivationEmail
-        ActivationEmail(request, context={"user": user}).send(to=[user.email])
-
-        return user
+        read_only_fields = ['id', 'email', 'role', 'created_at','profile_image']
 
     def update(self, instance, validated_data):
-        user = self.context['request'].user
-        provider = getattr(user, 'auth_provider', 'email')
-
-        password = validated_data.pop('password', None)
-        profile_pic = validated_data.pop('custom_user_profile', None)
-
         request = self.context.get('request')
-        delete_pic_flag = request.data.get('delete_profile_pic', '').lower() == 'true'
+        profile_pic = validated_data.pop('custom_user_profile', None)
+        delete_pic_flag = str(request.data.get('delete_profile_pic', '')).lower() == 'true'
 
         # Handle profile picture deletion
-        if delete_pic_flag:
-            if instance.custom_user_profile:
-                instance.custom_user_profile.delete(save=False)
+        if delete_pic_flag and getattr(instance, 'custom_user_profile', None):
+            instance.custom_user_profile.delete(save=False)
             instance.custom_user_profile = None
-        elif profile_pic is not None:
-            if str(provider).strip().lower() != 'email':
+        elif profile_pic:
+            if getattr(instance, 'auth_provider', 'email').lower() != 'email':
                 raise serializers.ValidationError(
                     "Profile picture can only be updated by users who signed up with email."
                 )
@@ -85,18 +51,54 @@ class UserSerializer(serializers.ModelSerializer):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        if password:
-            instance.set_password(password)
-
         instance.save()
         return instance
 
-class ProfileView(APIView):
-    def get(self, request):
-        serializer = UserSerializer(request.user)
-        return Response(serializer.data)
+class CustomerProfileSerializer(BaseUserSerializer):
+    class Meta(BaseUserSerializer.Meta):
+        fields = BaseUserSerializer.Meta.fields + [
+            'phone_number', 'address', 'pincode', 
+            'district', 'city', 'state','social_auth_pro_pic'
+        ]
 
-    
+class DeliveryManProfileSerializer(BaseUserSerializer):
+    delivery_profile = DeliveryManSerializer(source='deliveryman', read_only=True)
+
+    class Meta(BaseUserSerializer.Meta):
+        fields = BaseUserSerializer.Meta.fields + ['delivery_profile']
+
+class InvestorProfileSerializer(BaseUserSerializer):
+    investor_profile = InvestorSerializer(source='investor', read_only=True)
+
+    class Meta(BaseUserSerializer.Meta):
+        fields = BaseUserSerializer.Meta.fields + ['investor_profile']
+
+
+class PromoterProfileSerializer(BaseUserSerializer):
+    promoter_profile = PromoterSerializer(source='promoter', read_only=True)
+
+    class Meta(BaseUserSerializer.Meta):
+        fields = BaseUserSerializer.Meta.fields + ['promoter_profile']
+
+
+class RoleBasedUserSerializer(serializers.Serializer):
+    def to_representation(self, instance):
+        role = getattr(instance, 'role', 'customer')
+        if role == 'customer':
+            serializer = CustomerProfileSerializer(instance, context=self.context)
+        elif role == 'promoter':
+            serializer = PromoterProfileSerializer(instance, context=self.context)
+        elif role == 'investor':
+            serializer = InvestorProfileSerializer(instance, context=self.context)
+        elif role == 'deliveryman':
+            serializer = DeliveryManProfileSerializer(instance, context=self.context)
+        elif role in ['admin', 'warehouse_staff']:
+            serializer = BaseUserSerializer(instance, context=self.context)
+        else:
+            serializer = BaseUserSerializer(instance, context=self.context)
+        return serializer.data
+
+
 class ResendActivationEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
 

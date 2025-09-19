@@ -29,7 +29,7 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['featured', 'is_available']
-    search_fields = ['name', 'description', 'slug']
+    search_fields = ['name', 'description', 'slug','variants__variant_name','variants__description','variants__sku']
     ordering_fields = ['created_at', 'name']
 
     def get_permissions(self):
@@ -44,7 +44,7 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
         category_slug = self.request.query_params.get('category_slug')
         if category_slug:
             qs = qs.filter(category__slug=category_slug)
-        return qs
+        return qs.distinct()
 
 
 class ProductRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):

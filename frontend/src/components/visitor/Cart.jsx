@@ -152,127 +152,122 @@ const Cart = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl sm:text-4xl font-extrabold mb-8 text-gray-900 tracking-tight">
-        Your Cart
-      </h1>
+  <h1 className="text-3xl sm:text-4xl font-extrabold mb-8 text-gray-900 tracking-tight">
+    Your Cart
+  </h1>
 
-      {loading ? (
-        <CartShimmer count={3} />
-      ) : !cartItems.length ? (
-        <p className="text-center text-gray-500 text-lg">No items in your cart</p>
-      ) : (
-        <div className="space-y-6">
-          {cartItems.map((item) => (
-            <div
-              key={item.id}
-              className="flex flex-col md:flex-row items-start md:items-center border border-gray-200 rounded-3xl p-6 shadow-md hover:shadow-xl transition-shadow bg-white"
-            >
-              {/* Product Image */}
-              <div className="flex-shrink-0 w-full sm:w-32 md:w-28 lg:w-32 mb-4 md:mb-0">
-                <img
-                  src={getImageUrl(item)}
-                  alt={item.product_name || "Product"}
-                  className="w-full h-full object-cover rounded-2xl"
-                />
-              </div>
+  {loading ? (
+    <CartShimmer count={3} />
+  ) : !cartItems.length ? (
+    <p className="text-center text-gray-500 text-lg">No items in your cart</p>
+  ) : (
+    <div className="space-y-6">
+      {cartItems.map((item) => (
+        <div
+          key={item.id}
+          className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-6 items-center border border-gray-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition bg-white"
+        >
+          {/* Product Image */}
+          <div className="w-full sm:w-32 md:w-28 lg:w-32">
+            <img
+              src={getImageUrl(item)}
+              alt={item.product_name || "Product"}
+              className="w-full h-full object-cover rounded-2xl"
+            />
+          </div>
 
-              {/* Product Info */}
-              <div className="flex-1 md:ml-6 w-full">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate capitalize">
-                  {item.product_name} - {item.variant_name || "Default"}
-                </h2>
+          {/* Product Info */}
+          <div className="space-y-2">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 capitalize truncate">
+              {item.product_name} - {item.variant_name || "Default"}
+            </h2>
 
-                {/* Pricing */}
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  {item.offer_price && parseFloat(item.offer_price) < parseFloat(item.base_price) ? (
-                    <>
-                      <p className="text-xl sm:text-2xl font-bold text-green-600">
-                        ₹{item.final_price}
-                      </p>
-                      <p className="text-gray-400 line-through text-sm sm:text-base">
-                        ₹{item.base_price}
-                      </p>
-                      <p className="text-red-500 font-semibold text-sm sm:text-base">
-                        {Math.round(((item.base_price - item.final_price) / item.base_price) * 100)}% OFF
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-xl sm:text-2xl font-bold text-gray-900">₹{item.final_price}</p>
-                  )}
-                </div>
-
-                <p className="text-gray-600 mt-2 text-sm sm:text-base">
-                  Subtotal: ₹{(item.final_price * item.quantity).toFixed(2)}
-                </p>
-
-                {item.stock < 5 && (
-                  <p className="text-red-600 mt-1 font-medium text-sm">Only {item.stock} left in stock!</p>
-                )}
-              </div>
-
-              {/* Quantity Controls & Remove */}
-              <div className="flex flex-row md:flex-col items-center md:items-end mt-4 md:mt-0 space-x-4 md:space-x-0 md:space-y-3 w-full md:w-auto">
-                <div className="flex items-center space-x-2 border rounded-full px-3 py-1 bg-gray-50">
-                  <button
-                    onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                    disabled={item.quantity <= 1}
-                    className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
-                  >
-                    -
-                  </button>
-                  <span className="font-medium text-gray-800">{item.quantity}</span>
-                  <button
-                    onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                    disabled={item.quantity >= item.stock}
-                    className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
-                  >
-                    +
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => confirmRemoveItem(item)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition font-medium"
-                >
-                  Remove
-                </button>
-              </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {item.offer_price && parseFloat(item.offer_price) < parseFloat(item.base_price) ? (
+                <>
+                  <p className="text-xl font-bold text-green-600">₹{item.final_price}</p>
+                  <p className="text-sm text-gray-400 line-through">₹{item.base_price}</p>
+                  <p className="text-sm text-red-500 font-semibold">
+                    {Math.round(((item.base_price - item.final_price) / item.base_price) * 100)}% OFF
+                  </p>
+                </>
+              ) : (
+                <p className="text-xl font-bold text-gray-900">₹{item.final_price}</p>
+              )}
             </div>
-          ))}
 
-          {/* Cart Total & Checkout */}
-          <div className="mt-10 border-t border-gray-200 pt-6 flex flex-col sm:flex-row justify-between items-center bg-gray-50 p-6 rounded-2xl shadow-inner">
-            <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 sm:mb-0">
-              Total: ₹{cartTotal.toFixed(2)}
+            <p className="text-sm text-gray-600">
+              Subtotal: ₹{(item.final_price * item.quantity).toFixed(2)}
             </p>
+
+            {item.stock < 5 && (
+              <p className="text-sm font-medium text-red-600">Only {item.stock} left in stock!</p>
+            )}
+          </div>
+
+          {/* Quantity & Remove */}
+          <div className="flex flex-col items-end gap-3">
+            <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
+              <button
+                onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                disabled={item.quantity <= 1}
+                className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
+              >
+                −
+              </button>
+              <span className="font-medium text-gray-800">{item.quantity}</span>
+              <button
+                onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                disabled={item.quantity >= item.stock}
+                className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
+              >
+                +
+              </button>
+            </div>
+
             <button
-              onClick={() => {
-                if (isAuthenticated) navigate("/checkout");
-                else {
-                  toast.info("Please log in as a customer to proceed to checkout");
-                  navigate("/login", { state: { from: "/checkout" } });
-                }
-              }}
-              className="px-8 py-3 bg-gradient-to-r from-[#155dfc] to-[#0f4bc4] text-white text-lg font-semibold rounded-2xl hover:opacity-90 transition"
+              onClick={() => confirmRemoveItem(item)}
+              className="px-4 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition font-medium"
             >
-              Proceed to Checkout
+              Remove
             </button>
           </div>
         </div>
-      )}
+      ))}
 
-      {/* Confirm Modal for deletion */}
-      <ConfirmModal
-        isOpen={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
-        onConfirm={handleDeleteItem}
-        title="Confirm Delete"
-        message={`Are you sure you want to remove "${itemToDelete?.product_name}" from your cart?`}
-        confirmText="Yes, Delete"
-        cancelText="Cancel"
-        loading={deleting}
-      />
+      {/* Cart Total & Checkout */}
+      <div className="mt-10 border-t border-gray-200 pt-6 bg-white rounded-2xl shadow-md p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+          Total: ₹{cartTotal.toFixed(2)}
+        </p>
+        <button
+          onClick={() => {
+            if (isAuthenticated) navigate("/checkout");
+            else {
+              toast.info("Please log in as a customer to proceed to checkout");
+              navigate("/login", { state: { from: "/checkout" } });
+            }
+          }}
+          className="px-8 py-3 bg-gradient-to-r from-[#155dfc] to-[#0f4bc4] text-white text-lg font-semibold rounded-2xl hover:opacity-90 transition"
+        >
+          Proceed to Checkout
+        </button>
+      </div>
     </div>
+  )}
+
+  {/* Confirm Modal for deletion */}
+  <ConfirmModal
+    isOpen={deleteConfirmOpen}
+    onClose={() => setDeleteConfirmOpen(false)}
+    onConfirm={handleDeleteItem}
+    title="Confirm Delete"
+    message={`Are you sure you want to remove "${itemToDelete?.product_name}" from your cart?`}
+    confirmText="Yes, Delete"
+    cancelText="Cancel"
+    loading={deleting}
+  />
+</div>
   );
 };
 

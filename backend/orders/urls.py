@@ -17,21 +17,25 @@ from .views import (
 
     # Warehouse item flows
     OrderItemListAPIView,
-    PickOrderItemAPIView,
-    PackOrderItemAPIView,
-    ShipOrderItemAPIView,
 
     # Shipping address flows
     ShippingAddressListCreateView,
     ShippingAddressRetrieveUpdateDestroyView,
-
+)
+from .returnReplacement import (
     # Return request flows
     ReturnRequestCreateAPIView,
     ReturnRequestUpdateAPIView,
     ReturnRequestListAPIView,
     ReturnRequestDetailAPIView,
 
-    RefundStatusAPIView
+    RefundStatusAPIView,
+    ConfirmCODRefundAPIView,
+
+    ReplacementRequestCreateAPIView,
+    ReplacementRequestDetailAPIView,
+    ReplacementRequestListAPIView,
+    ReplacementRequestUpdateAPIView
    
 )
 
@@ -53,10 +57,7 @@ urlpatterns = [
     
     # 🚚 Warehouse Item APIs
     path('items/', OrderItemListAPIView.as_view(), name='items-list'),
-    path('items/<int:id>/pick/', PickOrderItemAPIView.as_view(), name='items-pick'),
-    path('items/<int:id>/pack/', PackOrderItemAPIView.as_view(), name='items-pack'),
-    path('items/<int:id>/ship/', ShipOrderItemAPIView.as_view(), name='items-ship'),
-
+    
     # 🏠 Shipping Address APIs
     path('shipping-addresses/', ShippingAddressListCreateView.as_view(), name='shipping-addresses-list-create'),
     path('shipping-addresses/<int:id>/', ShippingAddressRetrieveUpdateDestroyView.as_view(), name='shipping-addresses-detail'),
@@ -71,6 +72,16 @@ urlpatterns = [
     path("returns/", ReturnRequestListAPIView.as_view(), name="return-list"),
 
     # Details of a single return request
-    path("returns/<int:pk>/", ReturnRequestDetailAPIView.as_view(), name="return-detail"),
+    # urls.py
+    path("returns/<int:pk>/", ReturnRequestDetailAPIView.as_view()),
     path("refund-status/<int:order_id>/", RefundStatusAPIView.as_view(), name="refund-status"),
+
+    path("cod-refund/confirm/<int:order_id>/", ConfirmCODRefundAPIView.as_view(), name="confirm-cod-refund"),
+
+    # replacements/ endpoints should use plural like returns/
+    path("replacements/create/", ReplacementRequestCreateAPIView.as_view(), name="replacement-create"),
+    path("replacements/<int:pk>/update/", ReplacementRequestUpdateAPIView.as_view(), name="replacement-update"),
+    path("replacements/", ReplacementRequestListAPIView.as_view(), name="replacement-list"),
+    path("replacements/<int:pk>/", ReplacementRequestDetailAPIView.as_view(), name="replacement-detail"),
+
 ]

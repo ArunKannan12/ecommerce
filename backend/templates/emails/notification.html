@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: Arial, sans-serif; color: #333; }
+      .container { max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
+      .header { font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #4CAF50; }
+      .content { font-size: 14px; line-height: 1.6; }
+      .otp { font-size: 24px; font-weight: bold; color: #e53935; margin: 15px 0; text-align: center; }
+      .button {
+        display: inline-block; margin-top: 20px; padding: 10px 15px;
+        background: #4CAF50; color: #fff; text-decoration: none;
+        border-radius: 5px;
+      }
+      .footer { margin-top: 30px; font-size: 12px; color: #999; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">{{ notification.event|title }}</div>
+      <div class="content">
+        <p>{{ notification.message }}</p>
+
+        {% if notification.payload.otp %}
+          <div class="otp">{{ notification.payload.otp }}</div>
+        {% endif %}
+
+        {% if notification.order %}
+          <h3>Order Details:</h3>
+          <p>Order ID: <strong>#{{ notification.order.id }}</strong></p>
+          <p>Status: <strong>{{ notification.order.status|title }}</strong></p>
+          <p>Total: <strong>{{ notification.order.total }}</strong></p>
+          <p>Payment Method: <strong>{{ notification.order.payment_method }}</strong></p>
+
+          {% if notification.order.shipping_address %}
+            <h4>Shipping Address:</h4>
+            <p>
+              {{ notification.order.shipping_address.full_name }}<br>
+              {{ notification.order.shipping_address.address }}<br>
+              {{ notification.order.shipping_address.locality }}<br>
+              {{ notification.order.shipping_address.city }} - {{ notification.order.shipping_address.postal_code }}<br>
+              {{ notification.order.shipping_address.state }}, {{ notification.order.shipping_address.country }}
+            </p>
+          {% endif %}
+
+          {% if notification.order.items.all %}
+            <h4>Items:</h4>
+            <ul>
+              {% for item in notification.order.items.all %}
+                <li>
+                  {{ item.product_variant.product.name }} ({{ item.product_variant.variant_name }}) — 
+                  Qty: {{ item.quantity }} × Price: {{ item.price }}
+                  <br>
+                  <small>Status: {{ item.status|title }}</small>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+
+          <!-- Status-specific messages -->
+          {% if notification.order.status == 'cancelled' %}
+            <p>We’re sorry to inform you that your order has been cancelled.</p>
+            {% if notification.order.cancel_reason %}
+              <p><strong>Reason:</strong> {{ notification.order.cancel_reason }}</p>
+            {% endif %}
+          {% elif notification.order.status == 'delivered' %}
+            <p>Your order has been successfully delivered. Thank you for shopping with us!</p>
+          {% else %}
+            {% if notification.order.items.all %}
+              {% for item in notification.order.items.all %}
+                {% if item.status == 'shipped' %}
+                  <p>Item <strong>{{ item.product_variant.product.name }}</strong> has been shipped!</p>
+                {% elif item.status == 'out_for_delivery' %}
+                  <p>Item <strong>{{ item.product_variant.product.name }}</strong> is out for delivery 🚚</p>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          {% endif %}
+        {% endif %}
+
+        {% if notification.payload.tracking_url %}
+          <a href="{{ notification.payload.tracking_url }}" class="button">Track Order</a>
+        {% endif %}
+      </div>
+
+      <div class="footer">
+        This is an automated message from YourShop. Please do not reply directly to this email.
+      </div>
+    </div>
+  </body>
+</html>

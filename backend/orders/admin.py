@@ -1,6 +1,7 @@
+from .models import Notification
 # delivery/admin.py
 from django.contrib import admin
-from .models import Order, OrderItem, ShippingAddress, ReturnRequest
+from .models import Order, OrderItem, ShippingAddress, ReturnRequest, ReplacementRequest
 
 # -------------------- INLINE --------------------
 class OrderItemInline(admin.TabularInline):
@@ -48,4 +49,58 @@ class ReturnRequestAdmin(admin.ModelAdmin):
     list_filter = ("status", "refund_method", "pickup_status", "warehouse_decision", "admin_decision", "created_at")
     search_fields = ("order__id", "order_item__product_variant__variant_name", "user__email", "user_upi")
     readonly_fields = ("created_at", "updated_at", "refunded_at")
+    ordering = ("-created_at",)
+
+# -------------------- REPLACEMENT REQUEST --------------------
+@admin.register(ReplacementRequest)
+class ReplacementRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "order", "order_item", "user", "status", 
+        "pickup_status", "warehouse_decision", "admin_decision",
+        "shipped_at", "delivered_at", "created_at", "updated_at"
+    )
+    list_filter = (
+        "status", "pickup_status", "warehouse_decision", "admin_decision", "created_at"
+    )
+    search_fields = ("order__id", "order_item__product_variant__variant_name", "user__email")
+    readonly_fields = ("created_at", "updated_at", "shipped_at", "delivered_at")
+    ordering = ("-created_at",)
+
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "order",
+        "order_item",
+        "event",
+        "channel",
+        "status",
+        "otp_verified",
+        "created_at",
+        "sent_at",
+    )
+    list_filter = (
+        "event",
+        "channel",
+        "status",
+        "otp_verified",
+        "created_at",
+    )
+    search_fields = (
+        "user__email",
+        "order__id",
+        "order_item__id",
+        "otp_secret",
+        "message",
+    )
+    readonly_fields = (
+        "otp_secret",
+        "otp_verified",
+        "sent_at",
+        "created_at",
+        "updated_at",
+    )
     ordering = ("-created_at",)

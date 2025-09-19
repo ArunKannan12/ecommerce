@@ -13,6 +13,7 @@ from products.models import ProductVariant
 from promoter.models import Promoter
 from cart.models import CartItem
 import razorpay
+from razorpay.errors import ServerError, BadRequestError, GatewayError, SignatureVerificationError
 from django.conf import settings
 
 
@@ -236,7 +237,7 @@ def process_refund(obj, amount=None):
         amount = getattr(obj, 'total', None) or getattr(obj, 'refund_amount', 0)
 
     payment_method = getattr(obj, 'payment_method', '').lower()
-    user = getattr(obj, 'user', None)
+    user_upi = getattr(obj, 'user_upi', None)
 
     # --- Razorpay Refund ---
     if payment_method == "razorpay":
@@ -247,15 +248,21 @@ def process_refund(obj, amount=None):
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 
         try:
-            # Create refund in Razorpay
             refund = client.payment.refund(payment_id, {"amount": int(amount * 100)})
 
             # Store refund details
-            obj.is_refunded = True
+            obj.is_refunded = True                      # refund initiated, but not finalized
             obj.refunded_at = timezone.now()
-            obj.refund_status = refund.get("status", "initiated")  # e.g. "processed", "failed", etc.
-            obj.refund_id = refund.get("id")                       # Razorpay refund id (rfnd_xxx)
-            obj.save(update_fields=["is_refunded", "refunded_at", "refund_status", "refund_id"])
+            obj.refund_status = refund.get("status", "pending")  # Razorpay returns: pending, processed, failed
+            obj.refund_id = refund.get("id")            # Razorpay refund id (rfnd_xxx)
+            obj.refund_finalized = obj.refund_status == "processed"
+
+            obj.save(update_fields=[
+                "is_refunded", "refunded_at", "refund_status",
+                "refund_id", "refund_finalized"
+            ])
+
+            return obj.refund_id
 
         except Exception as e:
             obj.refund_status = "failed"
@@ -264,56 +271,101 @@ def process_refund(obj, amount=None):
 
     # --- COD / Manual Refund ---
     elif payment_method in ["cod", "cash on delivery"]:
-        user_upi = getattr(user, "upi_id", None)
-
         if user_upi:
             print(f"Initiating COD refund of {amount} to {user_upi}")
-            obj.refund_status = "pending"  # until admin actually sends money manually
+            obj.refund_status = "pending"  # waiting for admin to actually send UPI transfer
+            obj.user_upi=user_upi
         else:
             obj.refund_status = "not_applicable"
 
         obj.is_refunded = False
         obj.refunded_at = None
         obj.refund_id = None
-        obj.save(update_fields=["refund_status", "is_refunded", "refunded_at", "refund_id"])
-
-
-
+        obj.refund_finalized = False
+        obj.save(update_fields=[
+            "refund_status", "is_refunded", "refunded_at",
+            "refund_id", "refund_finalized"
+        ])
+        return None
 
 def check_refund_status(order_id):
-    client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
     try:
         order = Order.objects.get(id=order_id)
+
+        # ---------------- COD / UPI Refund ----------------
+        if order.payment_method.lower() in ["cod", "cash on delivery"]:
+            if not order.refund_id:
+                return {"success": False, "message": "No refund initiated for this COD order."}
+
+            status = order.refund_status or "pending"
+            message = (
+                "Refund Completed via UPI transfer."
+                if status.lower() in ["refunded", "completed"]
+                else "Refund is in progress. Please check back later."
+            )
+
+            return {
+                "success": True,
+                "order_id": order.id,
+                "refund_id": order.refund_id,
+                "refund_status": status,
+                "amount": float(getattr(order, "refund_amount", order.total)),
+                "refund_method": "UPI",
+                "is_refunded": order.is_refunded,
+                "refunded_at": order.refunded_at,
+                "message": message,
+            }
+
+        # ---------------- Razorpay Refund ----------------
         if not order.refund_id:
-            return {"success": False, "message": "No refund initiated for this order"}
-        
-        refund = client.refund.fetch(order.refund_id)
-        status = refund.get("status", "unknown")
-        order.refund_status = status
+            return {"success": False, "message": "No refund initiated for this order."}
 
-        if status == "processed" and not order.refund_finalized:
-            order.refund_finalized = True
-            order.refunded_at = timezone.now()
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        try:
+            refund = client.refund.fetch(order.refund_id)
+            status = refund.get("status", "unknown")
 
-        # Save all updated fields
-        order.save(update_fields=["refund_status", "refund_finalized", "refunded_at"])
+            order.refund_status = status
 
-        message = (
-            "Refund Processed – may take 5–7 days to reflect in your account."
-            if status == "processed"
-            else "Refund is in progress. Please check back later."
-        )
+            # Mark as finalized if processed
+            if status == "processed" and not order.refund_finalized:
+                order.refund_finalized = True
+                order.is_refunded = True
+                order.refunded_at = timezone.now()
+            elif status == "failed":
+                order.refund_status = "failed"
 
-        return {
-            "success": True,
-            "refund_id": refund["id"],
-            "status": refund["status"],
-            "amount": refund["amount"] / 100,
-            "payment_id": refund["payment_id"],
-            "finalized": order.refund_finalized,
-            "message": message,
-        }
+            order.save(update_fields=["refund_status", "refund_finalized", "is_refunded", "refunded_at"])
+
+            message = (
+                "Refund Processed – may take 5–7 days to reflect in your account."
+                if status == "processed"
+                else "Refund is in progress. Please check back later."
+            )
+
+            return {
+                "success": True,
+                "order_id": order.id,
+                "refund_id": refund.get("id", order.refund_id),
+                "refund_status": status,
+                "amount": refund.get("amount", Decimal(order.total) * 100) / 100,
+                "refund_method": "Razorpay",
+                "payment_id": refund.get("payment_id"),
+                "is_refunded": order.refund_finalized,
+                "refunded_at": order.refunded_at,
+                "message": message,
+            }
+
+        except ServerError:
+            return {"success": False, "message": "Razorpay server error. Please try again later."}
+        except BadRequestError as e:
+            return {"success": False, "message": f"Invalid refund ID: {str(e)}"}
+        except GatewayError as e:
+            return {"success": False, "message": f"Payment gateway error: {str(e)}"}
+        except Exception as e:
+            return {"success": False, "message": str(e) or "Unknown Razorpay error."}
+
     except Order.DoesNotExist:
-        return {"success": False, "message": "Order not found"}
+        return {"success": False, "message": "Order not found."}
     except Exception as e:
-        return {"success": False, "message": str(e)}
+        return {"success": False, "message": str(e) or "Unknown error."}

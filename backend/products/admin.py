@@ -7,7 +7,7 @@ from .forms import ProductVariantForm
 # --------------------- CATEGORY ---------------------
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug')
+    list_display = ('id','name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
     search_fields = ('name',)
 
@@ -29,8 +29,8 @@ class ProductVariantInline(nested_admin.NestedTabularInline):
     fields = (
         'variant_name', 'sku', 'base_price', 'offer_price',
         'stock', 'is_active', 'promoter_commission_rate',
-        'is_returnable', 'return_days',           
-        'is_replacement_only', 'replacement_days'  
+        'allow_return', 'return_days',           
+        'allow_replacement', 'replacement_days'  
     )
     readonly_fields = ('final_price_display',)
 
@@ -74,9 +74,9 @@ class ProductVariantAdmin(admin.ModelAdmin):
     list_display = (
         'id', 'product', 'variant_name', 'sku', 'base_price', 'offer_price',
         'final_price', 'stock', 'is_active', 'promoter_commission_rate',
-        'is_returnable', 'return_days', 'is_replacement_only', 'replacement_days'  # ← added
+        'allow_return', 'return_days', 'allow_replacement', 'replacement_days'  # ← added
     )
-    list_filter = ('is_active', 'is_returnable', 'is_replacement_only')  # optional
+    list_filter = ('is_active', 'allow_return', 'allow_replacement')  # optional
     search_fields = ('variant_name', 'sku', 'product__name')
     inlines = [ProductVariantImageInline]
 

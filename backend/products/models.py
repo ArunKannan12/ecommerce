@@ -78,6 +78,7 @@ class Product(models.Model):
 class ProductVariant(models.Model):
     product = models.ForeignKey("Product", on_delete=models.CASCADE, related_name='variants')
     variant_name = models.CharField(max_length=50)
+    description=models.TextField(blank=True,help_text="Optional description for this specific variant")
     promoter_commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     sku = models.CharField(max_length=50, unique=True)
     stock = models.PositiveIntegerField(default=0)
@@ -87,49 +88,26 @@ class ProductVariant(models.Model):
     offer_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
     # Returnable
-    is_returnable = models.BooleanField(default=False)
-    return_days = models.PositiveIntegerField(default=7, null=True, blank=True)
+    allow_return = models.BooleanField(default=False)
+    return_days = models.PositiveIntegerField(null=True, blank=True)
 
     # Replacement-only
-    is_replacement_only = models.BooleanField(default=False)
-    replacement_days = models.PositiveIntegerField(default=7, null=True, blank=True)
+    allow_replacement = models.BooleanField(default=False)
+    replacement_days = models.PositiveIntegerField( null=True, blank=True)
 
     def clean(self):
         errors = {}
 
-        # Base price must exist
+        # ✅ Base price validation
         if self.base_price is None:
-            errors['base_price'] = ValidationError("Base price must be set.")
+            errors['base_price'] = "Base price must be set."
 
-        # Offer price cannot exceed base price
-        if self.offer_price and self.offer_price > self.base_price:
-            errors['offer_price'] = ValidationError("Offer price cannot exceed base price.")
-
-        # Cannot be both returnable and replacement-only
-        if self.is_returnable and self.is_replacement_only:
-            errors['is_returnable'] = ValidationError("Cannot be both returnable and replacement-only.")
-            errors['is_replacement_only'] = ValidationError("Cannot be both returnable and replacement-only.")
-
-        # Validate return_days if returnable
-        if self.is_returnable:
-            if not self.return_days or self.return_days <= 0:
-                errors['return_days'] = ValidationError("Return days must be greater than 0 if returnable.")
-            if self.return_days > 30:
-                errors['return_days'] = ValidationError("Return days cannot exceed 30.")
-        else:
-            self.return_days = None
-
-        # Validate replacement_days if replacement-only
-        if self.is_replacement_only:
-            if not self.replacement_days or self.replacement_days <= 0:
-                errors['replacement_days'] = ValidationError("Replacement days must be greater than 0 if replacement-only.")
-            if self.replacement_days > 30:
-                errors['replacement_days'] = ValidationError("Replacement days cannot exceed 30.")
-        else:
-            self.replacement_days = None
-
+        # ✅ Offer price check
+        if self.offer_price and self.base_price and self.offer_price > self.base_price:
+            errors['offer_price'] = "Offer price cannot exceed base price."
         if errors:
             raise ValidationError(errors)
+
 
     def save(self, *args, **kwargs):
         self.full_clean()  # Ensures clean() runs in admin/API

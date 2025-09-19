@@ -15,6 +15,8 @@ export const AuthContext = createContext({
   setUser: () => {},
   hasRole: () => false,
   isAdmin: () => false,
+  isDeliveryMan: () => false,
+  isWarehouseStaff: () => false,
 });
 
 // CSRF setup
@@ -139,15 +141,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ Role-based access
-  const hasRole = (role) => {
-    if (!user) return false;
-    if (Array.isArray(user.roles)) return user.roles.includes(role);
-    return user.role === role;
-  };
+    // ✅ Role-based access
+    const hasRole = (role) => {
+      if (!user) return false;
+      return user.role === role;
+    };
 
-  const isAdmin = () =>
-    hasRole("admin") || user?.is_staff || user?.is_superuser;
+    const isAdmin = () =>
+      hasRole("admin") || user?.is_staff;
+
+    const isDeliveryMan = () =>
+      hasRole("deliveryman");
+
+    const isWarehouseStaff = () =>
+      hasRole("warehouse");
+
 
   return (
     <AuthContext.Provider
@@ -160,10 +168,13 @@ export const AuthProvider = ({ children }) => {
         setUser,
         hasRole,
         isAdmin,
+        isDeliveryMan,
+        isWarehouseStaff,
       }}
     >
       {children}
     </AuthContext.Provider>
+
   );
 };
 

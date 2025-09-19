@@ -46,10 +46,9 @@ def user_profile_upload_path(instance, filename):
 ROLE_CHOICES = [
         ('customer', 'Customer'),
         ('promoter', 'Promoter'),
-        ('investor', 'Investor'),
         ('admin', 'Admin'),
         ('deliveryman','Delivery Man'),
-        ('warehouse_staff','Warehouse Staff'),
+        ('warehouse','Warehouse Staff'),
         ('investor','Investor'),
     ] 
 
