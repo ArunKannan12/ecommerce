@@ -1,18 +1,13 @@
 #accounts app
 
 from djoser.serializers import PasswordResetConfirmSerializer,SetPasswordSerializer
-from .models import CustomUser
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes,force_str
 from django.utils.http import urlsafe_base64_encode,urlsafe_base64_decode
-from django.template.loader import render_to_string
-from django.core.mail import send_mail
 from django.contrib.auth.password_validation import validate_password
 from accounts.email import CustomPasswordResetEmail
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from investor.serializers import InvestorSerializer
 from delivery.serializers import DeliveryManSerializer
 from promoter.serializers import PromoterSerializer
@@ -20,37 +15,19 @@ from promoter.serializers import PromoterSerializer
 User=get_user_model()
 
 class BaseUserSerializer(serializers.ModelSerializer):
-    profile_image=serializers.ImageField(source='custom_user_profile',read_only=True)
     class Meta:
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name',
             'is_active', 'is_verified', 'role',
-            'profile_image',
-            'created_at'
+            'created_at','custom_user_profile'
         ]
-        read_only_fields = ['id', 'email', 'role', 'created_at','profile_image']
+        read_only_fields = ['id', 'email', 'role', 'created_at','custom_user_profile']
 
     def update(self, instance, validated_data):
-        request = self.context.get('request')
-        profile_pic = validated_data.pop('custom_user_profile', None)
-        delete_pic_flag = str(request.data.get('delete_profile_pic', '')).lower() == 'true'
-
-        # Handle profile picture deletion
-        if delete_pic_flag and getattr(instance, 'custom_user_profile', None):
-            instance.custom_user_profile.delete(save=False)
-            instance.custom_user_profile = None
-        elif profile_pic:
-            if getattr(instance, 'auth_provider', 'email').lower() != 'email':
-                raise serializers.ValidationError(
-                    "Profile picture can only be updated by users who signed up with email."
-                )
-            instance.custom_user_profile = profile_pic
-
         # Update other fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-
         instance.save()
         return instance
 

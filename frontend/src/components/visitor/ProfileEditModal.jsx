@@ -98,42 +98,61 @@ const ProfileEditModal = ({ show, onHide, user, setUser }) => {
     setSaving(true);
     try {
       const userFormData = new FormData();
+
+      // Append only actual fields
       Object.entries(form).forEach(([key, value]) => {
-        userFormData.append(key, value);
+        if (value != null) userFormData.append(key, value);
       });
+
+      // Append file only if user selected one
       if (imageFile) {
+        console.log("Appending image file:", imageFile);
         userFormData.append('custom_user_profile', imageFile);
-      } else if (imageFile === null && user.custom_user_profile) {
-        userFormData.append('custom_user_profile', '');
       }
 
-      const userRes = await axiosInstance.patch('auth/users/me/', userFormData, {
+      console.log("FormData entries before sending:");
+      for (let pair of userFormData.entries()) {
+        console.log(pair[0], pair[1]);
+      }
+
+      const res = await axiosInstance.patch('auth/profile/', userFormData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setUser(userRes.data);
+      console.log("Response from profile update:", res.data);
+
+      setUser(res.data);
       toast.success('Profile updated successfully');
       handleClose();
-    } catch (error) {
+    } catch (err) {
+      console.error("Profile update error:", err);
       toast.error('Failed to update profile');
     } finally {
       setSaving(false);
     }
   };
 
+
   const handleDelete = async () => {
     setSaving(true);
     try {
       const formData = new FormData();
-      formData.append('delete_profile_pic', 'true');
-      const res = await axiosInstance.patch('auth/users/me/', formData, {
+      formData.append('delete_profile_pic', 'true'); // only this
+
+      console.log("Deleting profile pic, FormData:", Array.from(formData.entries()));
+
+      const res = await axiosInstance.patch('auth/profile/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+
+      console.log("Response from delete profile pic:", res.data);
+
       setUser(res.data);
       toast.success('Profile picture deleted');
       setConfirmDelete(false);
       handleClose();
-    } catch {
+    } catch (err) {
+      console.error("Delete profile pic error:", err);
       toast.error('Failed to delete picture');
       setConfirmDelete(false);
     } finally {

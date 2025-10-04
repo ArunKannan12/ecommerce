@@ -6,6 +6,7 @@ import GoogleAuth from './GoogleAuth';
 import FacebookAuth from './FacebookAuth';
 import axiosInstance from '../../api/axiosinstance';
 import { useAuth } from '../../contexts/authContext';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const LoginAndSignup = () => {
   const navigate = useNavigate();
@@ -211,201 +212,211 @@ const LoginAndSignup = () => {
   }, [isAuthenticated, navigate, location.state]);
 
   return (
-    <div className="min-h-screen flex justify-center items-center bg-gradient-to-br from-blue-50 to-gray-100 px-4">
-      <div className="w-full max-w-md bg-white/80 backdrop-blur-xl rounded-2xl 
-      shadow-xl border border-gray-200 p-8 transition-transform hover:scale-[1.01]">
+    <div className="min-h-screen flex justify-center items-center bg-gradient-to-br from-blue-50 to-gray-100 px-4 py-6">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-md bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-gray-200 p-6 sm:p-8 overflow-y-auto"
+        style={{ maxHeight: "calc(100vh - 3rem)" }}
+      >
         <h2 className="text-3xl font-extrabold text-center text-gray-900 mb-2">
-           {isLogin ? "Welcome Back 👋" : "Create Account 🚀"}
+          {isLogin ? "Welcome Back 👋" : "Create Account 🚀"}
         </h2>
-         <p className="text-center text-gray-500 mb-6">
+        <p className="text-center text-gray-500 mb-6">
           {isLogin ? "Login to continue shopping" : "Join us and start shopping today"}
         </p>
-        {isLogin ? (
-          <form onSubmit={handleLoginSubmit} noValidate className="space-y-4">
-            <div className='relative'>
-              <FaEnvelope className='absolute left-3 top-3 text-gray-400'/>
-              <input
-                ref={inputFocus}
-                type="email"
-                name="email"
-                value={loginData.email}
-                onChange={handleLoginChange}
-                placeholder="Email"
-                className={`w-full pl-10 pr-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  loginErrors.email ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {loginErrors.email && <p className="text-sm text-red-500 mt-1">{loginErrors.email}</p>}
-            </div>
 
-            <div className="relative">
-              <FaLock className="absolute left-3 top-3 text-gray-400" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="password"
-                value={loginData.password}
-                onChange={handleLoginChange}
-                placeholder="Password"
-                className={`w-full pl-10 pr-10 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                loginErrors.password ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              <span
-                onClick={togglePassword}
-                className="absolute right-3 top-3 text-gray-500 cursor-pointer"
-                >
-                {showPassword ? <FaEyeSlash /> : <FaEye />}
-              </span>
-                {loginErrors.password && (
-                  <p className="text-sm text-red-500 mt-1">{loginErrors.password}</p>
-                )}
-            </div>
-
-            <div className="flex items-center justify-between text-sm text-gray-600">
-              <label className="flex items-center gap-2 cursor-pointer">
+        <AnimatePresence mode="wait">
+          {isLogin ? (
+            <motion.form
+              key="login"
+              onSubmit={handleLoginSubmit}
+              initial={{ x: 50, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -50, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-4"
+            >
+              {/* LOGIN FORM */}
+              {/* Email */}
+              <div className="relative">
+                <FaEnvelope className="absolute left-3 top-3 text-gray-400" />
                 <input
-                  type="checkbox"
-                  id="rememberMe"
-                  checked={rememberMe}
-                  onChange={() => setRememberMe(!rememberMe)}
-                  className="accent-blue-600"
+                  ref={inputFocus}
+                  type="email"
+                  name="email"
+                  value={loginData.email}
+                  onChange={handleLoginChange}
+                  placeholder="Email"
+                  className={`w-full pl-10 pr-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    loginErrors.email ? "border-red-500" : "border-gray-300"
+                  }`}
                 />
+                {loginErrors.email && <p className="text-sm text-red-500 mt-1">{loginErrors.email}</p>}
+              </div>
+
+              {/* Password */}
+              <div className="relative">
+                <FaLock className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={loginData.password}
+                  onChange={handleLoginChange}
+                  placeholder="Password"
+                  className={`w-full pl-10 pr-10 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    loginErrors.password ? "border-red-500" : "border-gray-300"
+                  }`}
+                />
+                <span
+                  onClick={togglePassword}
+                  className="absolute right-3 top-3 text-gray-500 cursor-pointer"
+                >
+                  {showPassword ? <FaEyeSlash /> : <FaEye />}
+                </span>
+                {loginErrors.password && <p className="text-sm text-red-500 mt-1">{loginErrors.password}</p>}
+              </div>
+
+              {/* Remember & Forgot */}
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={() => setRememberMe(!rememberMe)}
+                    className="accent-blue-600"
+                  />
                   Remember Me
                 </label>
                 <a href="/forgot-password" className="text-blue-600 hover:underline font-medium">
                   Forgot Password?
                 </a>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2 rounded-lg font-semibold shadow hover:opacity-90 transition"
-            >
-              {loading ? 'Logging in...' : 'Login'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleSignupSubmit} noValidate className="space-y-5">
-            
-            {/* Email */}
-            <div className="relative">
-              <FaEnvelope className="absolute left-3 top-3 text-gray-400" />
-              <input
-                type="email"
-                name="email"
-                value={signupData.email}
-                onBlur={handleSignupChange}
-                onChange={handleSignupChange}
-                placeholder="Email"
-                className={`w-full pl-10 pr-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                  signupErrors.email ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {signupErrors.email && (
-                <p className="text-sm text-red-500 mt-1">{signupErrors.email}</p>
-              )}
-            </div>
-
-            {/* First + Last Name */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="relative">
-                <FaUser className="absolute left-3 top-3 text-gray-400" />
-                <input
-                  type="text"
-                  name="first_name"
-                  value={signupData.first_name}
-                  onChange={handleSignupChange}
-                  placeholder="First Name"
-                  className={`w-full pl-10 py-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 ${
-                    signupErrors.first_name ? "border-red-500" : "border-gray-300"
-                  }`}
-                />
-                {signupErrors.first_name && (
-                  <p className="text-sm text-red-500 mt-1">{signupErrors.first_name}</p>
-                )}
               </div>
 
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2 rounded-xl font-semibold shadow hover:opacity-90 transition"
+              >
+                {loading ? "Logging in..." : "Login"}
+              </button>
+            </motion.form>
+          ) : (
+            <motion.form
+              key="signup"
+              onSubmit={handleSignupSubmit}
+              initial={{ x: 50, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -50, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-4"
+            >
+              {/* SIGNUP FORM */}
+              {/* Email */}
               <div className="relative">
-                <FaUser className="absolute left-3 top-3 text-gray-400" />
+                <FaEnvelope className="absolute left-3 top-3 text-gray-400" />
                 <input
-                  type="text"
-                  name="last_name"
-                  value={signupData.last_name}
+                  type="email"
+                  name="email"
+                  value={signupData.email}
                   onChange={handleSignupChange}
-                  placeholder="Last Name"
-                  className={`w-full pl-10 py-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 ${
-                    signupErrors.last_name ? "border-red-500" : "border-gray-300"
+                  placeholder="Email"
+                  className={`w-full pl-10 pr-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                    signupErrors.email ? "border-red-500" : "border-gray-300"
                   }`}
                 />
-                {signupErrors.last_name && (
-                  <p className="text-sm text-red-500 mt-1">{signupErrors.last_name}</p>
-                )}
+                {signupErrors.email && <p className="text-sm text-red-500 mt-1">{signupErrors.email}</p>}
               </div>
-            </div>
 
-            {/* Password */}
-            <div className="relative">
-              <FaLock className="absolute left-3 top-3 text-gray-400" />
-              <input
-                type="password"
-                name="password"
-                value={signupData.password}
-                onChange={handleSignupChange}
-                placeholder="Password"
-                className={`w-full pl-10 py-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 ${
-                  signupErrors.password ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {signupErrors.password && (
-                <p className="text-sm text-red-500 mt-1">{signupErrors.password}</p>
-              )}
-            </div>
+              {/* Names */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="relative">
+                  <FaUser className="absolute left-3 top-3 text-gray-400" />
+                  <input
+                    type="text"
+                    name="first_name"
+                    value={signupData.first_name}
+                    onChange={handleSignupChange}
+                    placeholder="First Name"
+                    className={`w-full pl-10 py-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 ${
+                      signupErrors.first_name ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {signupErrors.first_name && <p className="text-sm text-red-500 mt-1">{signupErrors.first_name}</p>}
+                </div>
 
-            {/* Confirm Password */}
-            <div className="relative">
-              <FaLock className="absolute left-3 top-3 text-gray-400" />
-              <input
-                type="password"
-                name="re_password"
-                value={signupData.re_password}
-                onChange={handleSignupChange}
-                placeholder="Confirm Password"
-                className={`w-full pl-10 py-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 ${
-                  signupErrors.re_password ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {signupErrors.re_password && (
-                <p className="text-sm text-red-500 mt-1">{signupErrors.re_password}</p>
-              )}
-            </div>
+                <div className="relative">
+                  <FaUser className="absolute left-3 top-3 text-gray-400" />
+                  <input
+                    type="text"
+                    name="last_name"
+                    value={signupData.last_name}
+                    onChange={handleSignupChange}
+                    placeholder="Last Name"
+                    className={`w-full pl-10 py-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 ${
+                      signupErrors.last_name ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {signupErrors.last_name && <p className="text-sm text-red-500 mt-1">{signupErrors.last_name}</p>}
+                </div>
+              </div>
 
+              {/* Password */}
+              <div className="relative">
+                <FaLock className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="password"
+                  name="password"
+                  value={signupData.password}
+                  onChange={handleSignupChange}
+                  placeholder="Password"
+                  className={`w-full pl-10 py-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 ${
+                    signupErrors.password ? "border-red-500" : "border-gray-300"
+                  }`}
+                />
+                {signupErrors.password && <p className="text-sm text-red-500 mt-1">{signupErrors.password}</p>}
+              </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-2 rounded-lg font-semibold shadow hover:opacity-90 transition"
-            >
-              {loading ? 'Registering...' : 'Register'}
-            </button>
-          </form>
-        )}
+              {/* Confirm Password */}
+              <div className="relative">
+                <FaLock className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="password"
+                  name="re_password"
+                  value={signupData.re_password}
+                  onChange={handleSignupChange}
+                  placeholder="Confirm Password"
+                  className={`w-full pl-10 py-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 ${
+                    signupErrors.re_password ? "border-red-500" : "border-gray-300"
+                  }`}
+                />
+                {signupErrors.re_password && <p className="text-sm text-red-500 mt-1">{signupErrors.re_password}</p>}
+              </div>
 
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-2 rounded-xl font-semibold shadow hover:opacity-90 transition"
+              >
+                {loading ? "Registering..." : "Register"}
+              </button>
+            </motion.form>
+          )}
+        </AnimatePresence>
 
-        <div className="flex items-center my-6">
+        {/* Social Login */}
+        <div className="flex items-center my-5">
           <hr className="flex-grow border-gray-300" />
           <span className="px-3 text-gray-400 text-sm">or continue with</span>
           <hr className="flex-grow border-gray-300" />
         </div>
 
-         {/* Social Buttons */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           <GoogleAuth />
-          <FacebookAuth />
         </div>
 
-
-        {/* Switch */}
+        {/* Switch login/signup */}
         <p className="text-center text-gray-600 mt-6">
           {isLogin ? "Don’t have an account?" : "Already have an account?"}{" "}
           <span
@@ -415,7 +426,7 @@ const LoginAndSignup = () => {
             {isLogin ? "Sign Up" : "Login"}
           </span>
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 };

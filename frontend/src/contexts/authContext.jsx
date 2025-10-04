@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }) => {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const res = await axiosInstance.get("auth/users/me/");
+      const res = await axiosInstance.get("auth/profile/");
       setUser(res.data);
            
       setIsAuthenticated(true);
@@ -138,6 +138,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
       setLoading(false);
+      navigate("/login", { replace: true });
     }
   };
 

@@ -21,7 +21,7 @@ const Checkout = () => {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState("");
-  const [pendingOrderId, setPendingOrderId] = useState(null);
+  const [pendingorderNumber, setPendingorderNumber] = useState(null);
   const [selectedAddress, setSelectedAddress] = useState(null);
 
   const [orderPreview, setOrderPreview] = useState({
@@ -248,44 +248,61 @@ const Checkout = () => {
           ? { shipping_address_id: selectedAddress.id }
           : { shipping_address: cleanAddress }),
       };
-      console.log(payload,'payload');
-      
 
       const res = await axiosInstance.post(endpoint, payload);
-      const orderId = res.data.order?.id || res.data.id;
+      const orderNumber = res.data.order?.order_number || res.data.order?.id;
 
+      // COD case
+      if (paymentMethod === "Cash on Delivery") {
+        toast.success("Order placed successfully with COD");
+
+        // Cleanup
+        if (!isBuyNowFlow && isAuthenticated) await refetchAuthCart();
+        if (!isBuyNowFlow && !isAuthenticated) {
+          localStorage.removeItem("cart");
+          setGuestCartItems([]);
+        }
+        if (isBuyNowFlow) {
+          sessionStorage.removeItem(BUY_NOW_KEY);
+          setBuyNowItems([]);
+        }
+
+        navigate(`/orders/${orderNumber}/`);
+        return; // ✅ Prevent running rest of the code
+      }
+
+      // Razorpay case
       if (paymentMethod === "Razorpay") {
         await handleRazorpayPayment({
-          order_id: res.data.razorpay_order_id,
+          razorpay_order_id: res.data.razorpay_order_id,
           amount: res.data.amount,
           currency: res.data.currency,
           razorpay_key: res.data.razorpay_key,
-          orderId,
+          orderNumber,
+          onSuccess: () => {
+            // Cleanup after successful payment
+            if (!isBuyNowFlow && isAuthenticated) refetchAuthCart();
+            if (!isBuyNowFlow && !isAuthenticated) {
+              localStorage.removeItem("cart");
+              setGuestCartItems([]);
+            }
+            if (isBuyNowFlow) {
+              sessionStorage.removeItem(BUY_NOW_KEY);
+              setBuyNowItems([]);
+            }
+            navigate(`/orders/${orderNumber}/`);
+          },
         });
+        return;
       }
 
-      toast.success("Order placed successfully");
-
-      // cleanup
-      if (!isBuyNowFlow && isAuthenticated) {
-        await refetchAuthCart();
-      }
-      if (!isBuyNowFlow && !isAuthenticated) {
-        localStorage.removeItem("cart");
-        setGuestCartItems([]);
-      }
-      if (isBuyNowFlow) {
-        sessionStorage.removeItem(BUY_NOW_KEY);
-        setBuyNowItems([]);
-      }
-
-      setPendingOrderId(null);
-      navigate(`/orders/${orderId}/`);
     } catch (error) {
-      console.error("[Checkout] Order placement failed", error.response?.data || error.message);
+      console.error(error.response?.data || error);
       toast.error(error.response?.data?.detail || "Failed to place order");
     }
   };
+
+
 
   /** ------------------------
    *  RENDER

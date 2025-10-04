@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
 from .notificationModel import *
+import random
 
 User = get_user_model()
 phone_regex = RegexValidator(regex=r'^[6-9]\d{9}$', message="Enter a valid 10-digit phone number")
@@ -44,6 +45,13 @@ class PaymentMethod(models.TextChoices):
     COD = 'Cash on Delivery', 'Cash on Delivery'
     RAZORPAY = 'Razorpay', 'Razorpay'
 
+def generate_order_number():
+    """Generate a unique alphanumeric order number like ORD-123456789012."""
+    while True:
+        number = f"ORD-{random.randint(10**11, 10**12 - 1)}"
+        if not Order.objects.filter(order_number=number).exists():
+            return number
+
 
 class Order(models.Model):
     REFUND_STATUS_CHOICES = [
@@ -51,7 +59,7 @@ class Order(models.Model):
         ("initiated", "Initiated"),
         ("processed", "Processed"),
         ("failed", "Failed"),
-        ("refunded", "Refunded"),        # 👈 add this
+        ("refunded", "Refunded"),
         ("not_applicable", "Not Applicable"),
     ]
 
@@ -63,8 +71,8 @@ class Order(models.Model):
     shipping_address = models.ForeignKey(ShippingAddress, on_delete=models.CASCADE)
     status = models.CharField(choices=OrderStatus.choices, default=OrderStatus.PENDING, max_length=20)
 
-    subtotal=models.DecimalField(max_digits=10,decimal_places=2,default=Decimal('0.00'))
-    delivery_charge=models.DecimalField( max_digits=10, decimal_places=2,default=Decimal('0.00'))
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    delivery_charge = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
 
     payment_method = models.CharField(max_length=50, choices=PaymentMethod.choices, default=PaymentMethod.COD)
@@ -85,10 +93,11 @@ class Order(models.Model):
     cancelled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='cancelled_orders')
     cancelled_by_role = models.CharField(max_length=20, blank=True, null=True)
     refund_id = models.CharField(max_length=100, blank=True, null=True)
-    refund_status = models.CharField(max_length=50, choices=REFUND_STATUS_CHOICES,default='not_applicable')
+    refund_status = models.CharField(max_length=50, choices=REFUND_STATUS_CHOICES, default='not_applicable')
     refunded_at = models.DateTimeField(blank=True, null=True)
-    assigned_at=models.DateTimeField(null=True,blank=True)
+    assigned_at = models.DateTimeField(null=True, blank=True)
     refund_finalized = models.BooleanField(default=False)
+
     # Razorpay
     razorpay_order_id = models.CharField(max_length=100, blank=True, null=True)
     razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True)
@@ -96,8 +105,12 @@ class Order(models.Model):
     # Delivery
     delivered_by = models.ForeignKey(DeliveryMan, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders_delivered')
 
+    # --- NEW: Real Order Number ---
+    order_number = models.CharField(max_length=20, unique=True, editable=False, null=True, blank=True)
+
+
     def __str__(self):
-        return f"Order #{self.id} ({self.user.email} — {self.status})"
+        return f"Order #{self.order_number} ({self.user.email} — {self.status})"
 
     def restock_items(self):
         if self.status == OrderStatus.CANCELLED and not self.is_restocked:
@@ -109,9 +122,6 @@ class Order(models.Model):
             self.save(update_fields=['is_restocked'])
 
     def mark_refunded(self, refund_id=None, finalized=False):
-        """
-        Mark the order as refunded and sync related fields.
-        """
         self.is_refunded = True
         self.refund_status = "refunded"
         self.refund_finalized = finalized
@@ -128,12 +138,18 @@ class Order(models.Model):
                 "updated_at",
             ]
         )
-        
+
     def save(self, *args, **kwargs):
+        # Restock logic
         if self.pk:
             old = Order.objects.get(pk=self.pk)
             if old.status != OrderStatus.CANCELLED and self.status == OrderStatus.CANCELLED:
                 self.restock_items()
+
+        # Assign order_number if not set
+        if not self.order_number:
+            self.order_number = generate_order_number()
+
         super().save(*args, **kwargs)
 
     class Meta:
@@ -144,9 +160,8 @@ class Order(models.Model):
             models.Index(fields=['tracking_number']),
             models.Index(fields=['razorpay_order_id']),
             models.Index(fields=['razorpay_payment_id']),
-
+            models.Index(fields=['order_number']),  # ✅ new index for sorting
         ]
-
 
 class OrderItemStatus(models.TextChoices):
     PENDING = 'pending', 'Pending'
@@ -171,7 +186,7 @@ class OrderItem(models.Model):
     out_for_delivery_at = models.DateTimeField(null=True, blank=True)
     delivered_at=models.DateTimeField(null=True,blank=True)
     def __str__(self):
-        return f"{self.quantity} × {self.product_variant} (Order #{self.order.id})"
+        return f"{self.quantity} × {self.product_variant} (Order #{self.order.order_number})"
 
 
 class ReturnRequest(models.Model):
@@ -227,15 +242,16 @@ class ReturnRequest(models.Model):
         DeliveryMan, null=True, blank=True, on_delete=models.SET_NULL, related_name='verified_returns'
     )
     pickup_comment = models.TextField(blank=True, null=True)
-
+    pickup_collected_at = models.DateTimeField(null=True, blank=True)
     # Warehouse decision
     warehouse_decision = models.CharField(max_length=20, choices=DECISION_CHOICES, default="pending")
     warehouse_comment = models.TextField(blank=True, null=True)
+    warehouse_processed_at = models.DateTimeField(null=True, blank=True)  # ✅ NEW
 
     # Admin decision
     admin_decision = models.CharField(max_length=20, choices=DECISION_CHOICES, default="pending")
     admin_comment = models.TextField(blank=True, null=True)
-
+    admin_processed_at = models.DateTimeField(null=True, blank=True) 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -305,9 +321,8 @@ class ReturnRequest(models.Model):
 
     def __str__(self):
         if self.order_item:
-            return f"Return for Item #{self.order_item.id} in Order #{self.order.id}"
-        return f"Return for Order #{self.order.id}"
-
+            return f"Return for Item #{self.order_item.id} in Order #{self.order.order_number}"
+        return f"Return for Order #{self.order.order_number}"
 
 class ReplacementRequest(models.Model):
     STATUS_CHOICES = [
@@ -407,5 +422,5 @@ class ReplacementRequest(models.Model):
 
     def __str__(self):
         if self.order_item:
-            return f"Replacement for Item #{self.order_item.id} in Order #{self.order.id}"
-        return f"Replacement for Order #{self.order.id}"
+            return f"Replacement for Item #{self.order_item.id} in Order #{self.order.order_number}"
+        return f"Replacement for Order #{self.order.order_number}"

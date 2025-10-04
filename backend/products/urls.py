@@ -10,9 +10,7 @@ from .views import (
     ProductVariantImageListCreateAPIView,
     ProductVariantImageRetrieveUpdateDestroyAPIView,
     CustomerBannerListAPIView,
-    AdminBannerListAPIView,
-    BannerCreateAPIView,
-    BannerUpdateDestroyAPIView,
+    BulkProductVariantCreateAPIView
 
 )
 from django.urls import path
@@ -20,7 +18,7 @@ from django.urls import path
 urlpatterns = [
     # -------------------- CATEGORIES --------------------
     path('categories/', CategoryListCreateAPIView.as_view(), name='category-list-create'),
-    path('categories/<int:pk>/', CategoryRetrieveUpdateDestroyAPIView.as_view(), name='category-detail'),
+    path('categories/<slug:slug>/', CategoryRetrieveUpdateDestroyAPIView.as_view(), name='category-detail'),
 
     # -------------------- PRODUCTS --------------------
     path('products/', ProductListCreateAPIView.as_view(), name='product-list-create'),
@@ -35,12 +33,9 @@ urlpatterns = [
     # -------------------- VARIANT IMAGES --------------------
     path('variants/<int:variant_id>/images/', ProductVariantImageListCreateAPIView.as_view(), name='variant-image-list-create'),
     path('variants/images/<int:id>/', ProductVariantImageRetrieveUpdateDestroyAPIView.as_view(), name='variant-image-detail'),
-
+    path('products/<int:product_id>/variants/bulk/',BulkProductVariantCreateAPIView.as_view(),name='variant-bulk-create'),
     path("banner/active/", CustomerBannerListAPIView.as_view(), name="customer-banner-list"),
 
     # Admin
-    path("admin/", AdminBannerListAPIView.as_view(), name="admin-banner-list"),
-    path("admin/create/", BannerCreateAPIView.as_view(), name="banner-create"),
-    path("admin/<int:pk>/", BannerUpdateDestroyAPIView.as_view(), name="banner-update-destroy"),
-
+    
 ]

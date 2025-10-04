@@ -4,8 +4,17 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import ProtectedRoutes from "./ProtectedRoutes";
 import LoadingScreen from "../components/helpers/LoadinScreen";
 import { useAuth } from "../contexts/authContext";
+const AdminReplacements = lazy(()=>import("../components/admin/pages/AdminReplacements.jsx")) ;
+const AdminReturns = lazy(()=>import("../components/admin/pages/AdminReturns.jsx"))
+const AdminOrders = lazy(()=> import("../components/admin/pages/AdminOrders.jsx"))
+const AdminCustomers = lazy(()=> import("../components/admin/pages/AdminCustomers.jsx"));
+const AdminCategories = lazy(() => import ("../components/admin/pages/AdminCategories.jsx"));
 const AdminProducts = lazy(()=> import("../components/admin/pages/AdminProducts.jsx"))
-
+const AdminWarehouseLogs = lazy(()=> import ('../components/admin/pages/AdminWarehouseLogs.jsx'))
+const AdminDeliveryMan = lazy(()=>import ('../components/admin/pages/AdminDeliveryMan.jsx'))
+const AdminAllDeliveryman = lazy(()=>import('../components/admin/pages/AllDeliveryMan.jsx'))
+const AdminDeliveryTracking = lazy(()=>import('../components/admin/pages/DeliveryTracking.jsx'))
+const AdminAllBanner = lazy(()=>import('../components/admin/pages/AdminAllBanner.jsx'))
 // 🔄 Lazy-loaded components
 const VisitorHomePage = lazy(() => import("../components/visitor/VisitorHomePage"));
 const Home = lazy(() => import("../components/visitor/Home"));
@@ -19,7 +28,6 @@ const LoginAndSignup = lazy(() => import("../components/visitor/LoginAndSignup")
 const About = lazy(() => import("../components/visitor/About"));
 const ReturnRequest = lazy(() => import("../components/visitor/returnReplacement/ReturnRequest.jsx"));
 const ReplacementRequest = lazy(() => import("../components/visitor/returnReplacement/ReplacementRequest.jsx"));
-
 const AdminDashboard = lazy(() => import("../components/admin/AdminDashboard"));
 const WarehouseDashboard = lazy(() => import("../components/warehousestaff/WarehouseDashboard"));
 const DeliveryManDashboard = lazy(() => import("../components/deliveryman/DeliveryManDashboard"));
@@ -31,7 +39,6 @@ const ActivateAccount = lazy(() => import("../components/visitor/ActivateAccount
 const VerifyEmail = lazy(() => import("../components/visitor/VerifyEmail"));
 const FacebookAuth = lazy(() => import("../components/visitor/FacebookAuth"));
 const GoogleAuth = lazy(() => import("../components/visitor/GoogleAuth"));
-
 const AdminDashboardHome = lazy(()=>import('../components/admin/pages/AdminDashboardHome.jsx'))
 // 🌀 Suspense wrapper
 const withSuspense = (Component) => (
@@ -75,18 +82,23 @@ export const router = createBrowserRouter([
 
   // Customer routes
   {
-    element: <ProtectedRoutes allowedRoles={["customer"]} />,
-    children: [
-      { path: "/profile", element: withSuspense(<Profile />) },
-      { path: "/change-password", element: withSuspense(<ChangePassword />) },
-      { path: "checkout/", element: withSuspense(<Checkout />) },
-      { path: "orders/", element: withSuspense(<OrderList />) },
-      { path: "orders/:id/", element: withSuspense(<OrderDetail />) },
-      { path: "returns/create/:orderId", element: withSuspense(<ReturnRequest />) },
-      { path: "returns/:returnId", element: withSuspense(<ReturnRequest />) },
-      { path: "replacements/create/:orderId", element: withSuspense(<ReplacementRequest />) },
-    ],
-  },
+      element: <ProtectedRoutes allowedRoles={["customer"]} />,
+      children: [
+        {
+          element: withSuspense(<VisitorHomePage />), // Layout wrapper
+          children: [
+            { path: "/profile", element: withSuspense(<Profile />) },
+            { path: "/change-password", element: withSuspense(<ChangePassword />) },
+            { path: "checkout/", element: withSuspense(<Checkout />) },
+            { path: "orders/", element: withSuspense(<OrderList />) },
+            { path: "orders/:order_number/", element: withSuspense(<OrderDetail />) },
+            { path: "returns/create/:orderId", element: withSuspense(<ReturnRequest />) },
+            { path: "returns/:returnId", element: withSuspense(<ReturnRequest />) },
+            { path: "replacements/create/:orderId", element: withSuspense(<ReplacementRequest />) },
+          ],
+        },
+      ],
+    },
 
   // Admin routes
   {
@@ -99,7 +111,16 @@ export const router = createBrowserRouter([
         { index: true, element: <Navigate to="/admin/dashboard" replace /> }, // redirect
         { path: "dashboard", element: withSuspense(<AdminDashboardHome />) }, // default on /admin
         { path: "products", element: withSuspense(<AdminProducts/>) },
-        // { path: "customers", element: withSuspense(<CustomersAdmin />) },
+        {path:"categories",element:withSuspense(<AdminCategories/>)},
+        { path: "customers", element: withSuspense(<AdminCustomers />) },
+        {path:"orders",element:withSuspense(<AdminOrders/>)},
+        {path:"returns",element:withSuspense(<AdminReturns/>)},
+        {path:"replacements",element:withSuspense(<AdminReplacements/>)},
+        {path:"warehouse-logs",element:withSuspense(<AdminWarehouseLogs/>)},
+        {path:"delivery/delivery-man",element:withSuspense(<AdminDeliveryMan/>)},
+        {path:"deliverymen",element:withSuspense(<AdminAllDeliveryman/>)},
+        {path:"delivery-tracking",element:withSuspense(<AdminDeliveryTracking/>)},
+        {path:'banners',element:withSuspense(<AdminAllBanner/>)},
       ],
     },
     { path: "/profile", element: withSuspense(<Profile />) },

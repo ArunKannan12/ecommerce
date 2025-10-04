@@ -16,6 +16,8 @@ from .serializers import (ResendActivationEmailSerializer,
                             BaseUserSerializer,
                             DeliveryManProfileSerializer
                             )
+from rest_framework.parsers import MultiPartParser, FormParser
+from cloudinary.uploader import upload, destroy
 from django.middleware.csrf import get_token
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
@@ -311,7 +313,7 @@ class GoogleAuthView(APIView):
                 value=access_token,
                 httponly=True,
                 secure = not settings.DEBUG,
-                samesite='None',
+                samesite='Lax',
                 max_age=3600
             )
             response.set_cookie(
@@ -319,7 +321,7 @@ class GoogleAuthView(APIView):
                 value=refresh_token,
                 httponly=True,
                 secure = not settings.DEBUG,
-                samesite='None',
+                samesite='Lax',
                 max_age=7*24*60*60
 
             )
@@ -440,7 +442,7 @@ class FacebookLoginView(GenericAPIView):
                 value=access_token,
                 httponly=True,
                 secure = not settings.DEBUG,
-                samesite='None',
+                samesite='Lax',
                 max_age=3600
             )
         response.set_cookie(
@@ -448,7 +450,7 @@ class FacebookLoginView(GenericAPIView):
                 value=refresh_token,
                 httponly=True,
                 secure = not settings.DEBUG,
-                samesite='None',
+                samesite='Lax',
                 max_age=7*24*60*60,
                 path='/'
 
@@ -474,14 +476,14 @@ class CookieTokenRefreshView(TokenRefreshView):
             response = Response({'message': 'Token refreshed'}, status=status.HTTP_200_OK)
 
             response.set_cookie('access_token', new_access_token, httponly=True, secure=not settings.DEBUG,
-                                samesite='None', path='/', max_age=60 * 60)
+                                samesite='Lax', path='/', max_age=60 * 60)
             response.set_cookie('refresh_token', new_refresh_token, httponly=True, secure=not settings.DEBUG,
-                                samesite='None', path='/', max_age=7 * 24 * 60 * 60)
+                                samesite='Lax', path='/', max_age=7 * 24 * 60 * 60)
 
             # Refresh CSRF token
             csrf_token = get_token(request)
             response.set_cookie('csrftoken', csrf_token, httponly=False, secure=not settings.DEBUG,
-                                samesite='None', path='/', max_age=60 * 60)
+                                samesite='Lax', path='/', max_age=60 * 60)
 
             return response
 
@@ -521,14 +523,14 @@ class CookieTokenObtainPairView(TokenObtainPairView):
 
         # Set access token cookie
         res.set_cookie('access_token', access, httponly=True, secure=not settings.DEBUG,
-                   samesite='None', path='/', max_age=60 * 60)
+                   samesite='Lax', path='/', max_age=60 * 60)
         res.set_cookie('refresh_token', refresh, httponly=True, secure=not settings.DEBUG,
-                    samesite='None', path='/', max_age=7 * 24 * 60 * 60 if remember_me else None)
+                    samesite='Lax', path='/', max_age=7 * 24 * 60 * 60 if remember_me else None)
 
         # 🔐 Set CSRF token cookie
         csrf_token = get_token(request)
         res.set_cookie('csrftoken', csrf_token, httponly=False, secure=not settings.DEBUG,
-                    samesite='None', path='/', max_age=60 * 60)
+                    samesite='Lax', path='/', max_age=60 * 60)
 
         return res
 
@@ -575,43 +577,91 @@ def custom_jwt_view(request):
 
 
 class ProfileView(APIView):
-    """
-    Retrieve or update the role-based profile of the authenticated user.
-    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    role_serializers = {
+        "customer": CustomerProfileSerializer,
+        "promoter": PromoterProfileSerializer,
+        "investor": InvestorProfileSerializer,
+        "deliveryman": DeliveryManProfileSerializer,
+        "admin": BaseUserSerializer,
+        "warehouse": BaseUserSerializer,
+    }
 
-    def get_serializer(self, user):
-        role = getattr(user, 'role', 'customer')
-        if role == 'customer':
-            return CustomerProfileSerializer
-        elif role == 'promoter':
-            return PromoterProfileSerializer
-        elif role == 'investor':
-            return InvestorProfileSerializer
-        elif role == 'deliveryman':
-            return DeliveryManProfileSerializer
-        elif role in ['admin', 'warehouse_staff']:
-            return BaseUserSerializer
-        else:
-            return BaseUserSerializer
+    allowed_update_roles = ["customer", "promoter", "investor", "deliveryman"]
+
+    def get_serializer(self, user, *args, **kwargs):
+        serializer_class = self.role_serializers.get(user.role, BaseUserSerializer)
+        return serializer_class(user, *args, **kwargs)
 
     def get(self, request):
-        serializer_class = self.get_serializer(request.user)
-        serializer = serializer_class(request.user)
+        user = request.user
+        if not user.is_active:
+            return Response({"detail": "Your account is inactive."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = self.get_serializer(user, context={"request": request})
         return Response(serializer.data)
 
     def put(self, request):
-        serializer_class = self.get_serializer(request.user)
-        serializer = serializer_class(
-            request.user, data=request.data, partial=True, context={'request': request}
-        )
+        return self.update(request, partial=False)
+
+    def patch(self, request):
+        return self.update(request, partial=True)
+
+    def delete(self, request):
+        user = request.user
+        if user.custom_user_profile:
+            try:
+                destroy(f"custom_user_profile_pics/{user.id}_profile", resource_type="image")
+            except Exception:
+                pass
+        user.delete()
+        return Response({"detail": "Your profile has been deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+    def update(self, request, partial):
+        user = request.user
+
+        # Profile pic delete
+        if str(request.data.get("delete_profile_pic", "")).lower() == "true" and user.custom_user_profile:
+            try:
+                destroy(f"custom_user_profile_pics/{user.id}_profile", resource_type="image")
+                user.custom_user_profile = None
+                user.save()
+            except Exception:
+                return Response({"detail": "Image deletion failed."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Profile pic upload
+        image_file = request.FILES.get("custom_user_profile")
+        if image_file:
+            print(f"Received file: {image_file.name}, content_type: {image_file.content_type}, size: {image_file.size}")
+            if not image_file.content_type.startswith("image/"):
+                return Response({"detail": "Invalid file type. Only images are allowed."}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                result = upload(
+                    image_file,
+                    folder="custom_user_profile_pics",
+                    public_id=f"{user.id}_profile",
+                    overwrite=True,
+                    resource_type="image",
+                    transformation={"width": 300, "height": 300, "crop": "fill"},
+                )
+                print(f"Cloudinary upload result: {result}")
+                user.custom_user_profile = result.get("secure_url")
+                user.save()
+            except Exception as e:
+                print("Image upload exception:", e)
+                return Response({"detail": "Image upload failed."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not user.is_active:
+            return Response({"detail": "Your account is inactive."}, status=status.HTTP_403_FORBIDDEN)
+
+        if user.role not in self.allowed_update_roles:
+            return Response({"detail": "You are not allowed to update your profile."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = self.get_serializer(user, data=request.data, partial=partial, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-
-    def patch(self, request):
-        return self.put(request)
-
-    
 
 @csrf_exempt
 def create_superuser(request):

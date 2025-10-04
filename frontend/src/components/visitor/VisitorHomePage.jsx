@@ -11,13 +11,14 @@ const VisitorHomePage = () => {
   const totalItems = useCartCount();
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="fixed top-0 left-0 w-full z-50 bg-white shadow">
-        <Navbar
-          isAuthenticated={isAuthenticated}
-          totalItems={totalItems}
-          logout={logout}
-        />
-      </div>
+          <div className="fixed top-0 left-0 w-full z-50 bg-white shadow">
+      <Navbar
+        isAuthenticated={isAuthenticated}
+        totalItems={totalItems}
+        logout={logout}
+      />
+    </div>
+
 
       <div className="pt-[64px] flex-1 px-4">
         <Outlet />

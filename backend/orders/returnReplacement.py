@@ -69,8 +69,9 @@ class ReturnRequestUpdateAPIView(UpdateAPIView):
                                        pickup_verified_by=deliveryman if pickup_status.lower() == 'collected' else None ) 
             # Optional: auto-update status 
             if pickup_status.lower() == 'collected': 
+                instance.pickup_collected_at=timezone.now()
                 instance.status = 'pending' 
-                instance.save(update_fields=['status']) 
+                instance.save(update_fields=['status','pickup_collected_at']) 
                 return # ---------------- WAREHOUSE ---------------- 
             elif role == 'warehouse': 
                 if instance.pickup_status != 'collected': 
@@ -80,7 +81,9 @@ class ReturnRequestUpdateAPIView(UpdateAPIView):
                     raise ValidationError({"warehouse_decision": "This field is required."}) 
                 warehouse_comment = self.request.data.get('warehouse_comment', instance.warehouse_comment) 
                 # Save only warehouse fields 
-                instance = serializer.save( warehouse_decision=warehouse_decision, warehouse_comment=warehouse_comment ) 
+                instance = serializer.save( warehouse_decision=warehouse_decision, 
+                                           warehouse_comment=warehouse_comment ) 
+                instance.warehouse_processed_at=timezone.now()
                 # Auto-update status and restore stock if approved 
                 if warehouse_decision.lower() == 'approved': 
                     instance.status = 'approved' 
@@ -111,12 +114,14 @@ class ReturnRequestUpdateAPIView(UpdateAPIView):
                                                refund_amount=refund_amount, 
                                                admin_comment=admin_comment, 
                                                user_upi=user_upi ) 
+                    instance.admin_processed_at=timezone.now()
+                    instance.save(update_fields=['admin_processed_at'])
                     # Trigger refund if approved 
                     if admin_decision.lower() == "approved" and instance.refund_amount and instance.refund_amount > 0: 
                         refund_id = process_refund(instance) 
                         order = instance.order 
                         order.refund_id = refund_id or f"RET-{instance.id}" 
-                        if order.payment.method.lower() in ['razorpay']: 
+                        if order.payment_method.lower() in ['razorpay']: 
                             order.refund_status = "pending" 
                             order.is_refunded=False 
                             order.refund_finalized=False 
@@ -148,9 +153,9 @@ class ReturnRequestListAPIView(ListAPIView):
             status_param = self.request.query_params.get("status")
             if status_param:
                 queryset = queryset.filter(status=status_param)
-            order_id = self.request.query_params.get("order_id")
-            if order_id:
-                queryset = queryset.filter(order__id=order_id)
+            order_number = self.request.query_params.get("order_number")
+            if order_number:
+                queryset = queryset.filter(order__order_number=order_number)
             return queryset
 
         return ReturnRequest.objects.none()
@@ -176,11 +181,11 @@ class ReturnRequestDetailAPIView(RetrieveAPIView):
 class RefundStatusAPIView(APIView):
     permission_classes = [IsAdminOrCustomer]
 
-    def get(self, request, order_id):
-        order = get_object_or_404(Order, id=order_id)
+    def get(self, request, order_number):
+        order = get_object_or_404(Order, order_number=order_number)
         self.check_object_permissions(request, order)
 
-        result = check_refund_status(order_id)
+        result = check_refund_status(order_number)
         if not result.get("success"):
             return Response(result, status=status.HTTP_400_BAD_REQUEST)
         return Response(result, status=status.HTTP_200_OK)
@@ -189,9 +194,9 @@ class RefundStatusAPIView(APIView):
 class ConfirmCODRefundAPIView(APIView):
     permission_classes = [IsAdmin]
 
-    def post(self, request, order_id):
+    def post(self, request, order_number):
         try:
-            order = Order.objects.get(id=order_id)
+            order = Order.objects.get(order_number=order_number)
 
             # Only COD
             if order.payment_method.lower() not in ["cod", "cash on delivery"]:
@@ -216,18 +221,15 @@ class ConfirmCODRefundAPIView(APIView):
             order.mark_refunded(refund_id=order.refund_id, finalized=True)
 
             # Fetch all return requests related to this order
-            return_requests = ReturnRequest.objects.filter(order=order)
-
-            # Update each return request safely
-            for rr in return_requests:
-                rr.status = "refunded"
-                rr.refunded_at = order.refunded_at
-                rr.save()  # triggers save(), signals, updated_at, etc.
+            ReturnRequest.objects.filter(order__order_number=order.order_number).update(
+                status="refunded",
+                refunded_at=order.refunded_at
+            )
 
             return Response(
                 {
                     "success": True,
-                    "order_id": order.id,
+                    "order_number": order.order_number,
                     "refund_id": order.refund_id,
                     "refund_status": order.refund_status,
                     "amount": float(order.total),

@@ -4,7 +4,12 @@ from rest_framework.exceptions import ValidationError
 from .models import ShippingAddress
 from products.models import ProductVariant
 from promoter.models import Promoter
-from .utils import  calculate_delivery_charge
+from promoter.utils import apply_promoter_commission
+from cart.models import CartItem
+from .utils import  calculate_delivery_charge,create_order_with_items
+from django.conf import settings
+import razorpay
+from django.utils import timezone
 
 
 def validate_shipping_address(user, shipping_input):
@@ -71,6 +76,7 @@ def prepare_order_response(order, razorpay_order=None):
 
     order_data = OrderSerializer(order).data
     order_data.update({
+        "order_number":order.order_number,
         "subtotal": str(order.subtotal),
         "delivery_charge": str(order.delivery_charge),
         "total": str(order.total)
@@ -117,3 +123,111 @@ def calculate_order_preview(items, postal_code=None, shipping_address_id=None):
         "delivery_charge": delivery_charge,
         "total": subtotal + delivery_charge,
     }
+
+
+def verify_razorpay_payment(order, razorpay_order_id, razorpay_payment_id, razorpay_signature, user, client):
+    """
+    Verifies Razorpay payment signature and updates the order.
+    """
+    if order.is_paid:
+        return {
+            "message": "Order already marked as paid",
+            "order_number": order.order_number,
+            "status": order.status,
+            "is_paid": order.is_paid
+        }
+
+    # Verify Razorpay signature
+    try:
+        client.utility.verify_payment_signature({
+            "razorpay_order_id": razorpay_order_id,
+            "razorpay_payment_id": razorpay_payment_id,
+            "razorpay_signature": razorpay_signature
+        })
+    except razorpay.errors.SignatureVerificationError:
+        raise ValidationError("Invalid payment signature")
+
+    # Update order
+    order.razorpay_payment_id = razorpay_payment_id
+    order.razorpay_order_id = razorpay_order_id
+    order.is_paid = True
+    order.paid_at = timezone.now()
+    order.status = "processing"
+    order.payment_method = "Razorpay"
+    order.save()
+
+    # Apply promoter commission
+    apply_promoter_commission(order)
+
+    # Clear cart items if any
+    CartItem.objects.filter(cart__user=user).delete()
+
+    return {
+        "message": "Payment verified and order updated",
+        "order_number": order.order_number,
+        "status": order.status,
+        "is_paid": order.is_paid
+    }
+
+
+def process_checkout(user, items=None, shipping_address_input=None, payment_method=None, promoter_code=None, is_cart=False, existing_order=None):
+    """
+    Unified checkout handler for:
+    - Referral checkout
+    - Cart checkout
+    - Buy Now
+    - Existing order payment (existing_order)
+    Returns a dict with keys:
+    - 'order': the Order instance
+    - 'response': the serialized response dict for API
+    """
+    # If an existing order is provided, skip order creation
+    if existing_order:
+        order = existing_order
+        if payment_method:
+            validate_payment_method(payment_method)
+            order.payment_method = payment_method
+            order.save(update_fields=["payment_method"])
+    else:
+        # Validate shipping address
+        shipping_address = validate_shipping_address(user, shipping_address_input)
+        # Validate promoter if provided
+        promoter = validate_promoter(promoter_code) if promoter_code else None
+        # Validate payment method
+        validate_payment_method(payment_method)
+
+        # Create order with items
+        order, _ = create_order_with_items(
+            user=user,
+            items=items,
+            shipping_address=shipping_address,
+            payment_method=payment_method,
+            promoter=promoter
+        )
+
+    # Handle Cash on Delivery
+    if order.payment_method == "Cash on Delivery":
+        order.status = "pending"
+        order.is_paid = False
+        order.save(update_fields=["status", "is_paid", "payment_method"])
+
+        # Clear cart if applicable
+        if is_cart and items:
+            items.delete()
+
+        response_data = prepare_order_response(order, razorpay_order=None)
+        return {"order": order, "response": response_data}
+
+    # Razorpay handling
+    client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+    razorpay_order = client.order.create({
+        "amount": int(order.total * 100),
+        "currency": "INR",
+        "receipt": f"order_rcptid_{order.order_number}",
+        "payment_capture": 1
+    })
+    order.razorpay_order_id = razorpay_order.get("id")
+    order.save(update_fields=["razorpay_order_id", "payment_method"])
+
+    response_data = prepare_order_response(order, razorpay_order)
+    return {"order": order, "response": response_data}

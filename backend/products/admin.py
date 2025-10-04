@@ -42,7 +42,7 @@ class ProductVariantInline(nested_admin.NestedTabularInline):
 # --------------------- PRODUCTS ---------------------
 @admin.register(Product)
 class ProductAdmin(nested_admin.NestedModelAdmin):
-    list_display = ('name', 'category', 'is_available', 'featured', 'created_at', 'thumbnail')
+    list_display = ('id','name', 'category', 'is_available', 'featured', 'created_at', 'thumbnail')
     list_filter = ('category', 'is_available', 'featured')
     search_fields = ('name', 'description', 'slug')
     prepopulated_fields = {'slug': ('name',)}

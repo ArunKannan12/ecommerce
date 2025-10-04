@@ -9,6 +9,7 @@ from .views import (
     CookieTokenRefreshView,
     LogoutView,
     SetCSRFCookieView,
+    ProfileView,
     custom_jwt_view,
     create_superuser
 )
@@ -33,6 +34,7 @@ urlpatterns = [
 
     # Resend activation email
     path('auth/resend-activation/', ResendActivationEmailView.as_view(), name='resend-activation'),
+    path("auth/profile/", ProfileView.as_view(), name="profile"),
 
     # Set CSRF token
     path('auth/csrf/', SetCSRFCookieView.as_view(), name='set-csrf'),

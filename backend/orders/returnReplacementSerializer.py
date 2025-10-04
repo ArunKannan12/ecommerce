@@ -7,24 +7,33 @@ from products.models import ProductVariant
 from decimal import Decimal
 
 class ReturnRequestSerializer(serializers.ModelSerializer):
+    # --- Read-only relations ---
     order = OrderLightSerializer(read_only=True)
     order_item = OrderitemLightSerializer(read_only=True)
     shipping_address = serializers.SerializerMethodField(read_only=True)
     product = serializers.SerializerMethodField(read_only=True)
     variant = serializers.SerializerMethodField(read_only=True)
     variant_images = serializers.SerializerMethodField(read_only=True)
+    product_image = serializers.SerializerMethodField(read_only=True)
+    
+    # --- Status / Refund info ---
     is_refunded = serializers.SerializerMethodField(read_only=True)
     refunded_at_human = serializers.SerializerMethodField(read_only=True)
-    product_image = serializers.SerializerMethodField(read_only=True)
     refund_method_display = serializers.SerializerMethodField(read_only=True)
+    refund_id = serializers.SerializerMethodField(read_only=True)
+    refund_status = serializers.SerializerMethodField(read_only=True)
     delivery_charge = serializers.SerializerMethodField(read_only=True)
     return_days_remaining = serializers.SerializerMethodField(read_only=True)
+
+    # --- Pickup / warehouse / admin ---
     pickup_verified_by_name = serializers.SerializerMethodField(read_only=True)
     pickup_status_display = serializers.SerializerMethodField(read_only=True)
     warehouse_status_display = serializers.SerializerMethodField(read_only=True)
     admin_status_display = serializers.SerializerMethodField(read_only=True)
-    refund_id = serializers.SerializerMethodField(read_only=True)
-    refund_status = serializers.SerializerMethodField(read_only=True)
+    
+    # --- Payment info ---
+    payment_id = serializers.SerializerMethodField(read_only=True)
+    currency = serializers.SerializerMethodField(read_only=True)
 
     # --- Input fields ---
     user_upi = serializers.CharField(required=False, allow_blank=True)
@@ -32,25 +41,25 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
         choices=ReturnRequest.REFUND_METHOD_CHOICES,
         required=False
     )
-    order_id = serializers.PrimaryKeyRelatedField(
+    order_number = serializers.PrimaryKeyRelatedField(
         queryset=Order.objects.all(), write_only=True
     )
     order_item_id = serializers.PrimaryKeyRelatedField(
         queryset=OrderItem.objects.all(), write_only=True
     )
-
+    order_number_display = serializers.CharField(source='order.order_number', read_only=True)
     class Meta:
         model = ReturnRequest
         fields = [
             "id",
             # relations
             "order", "order_item",
-            "order_id", "order_item_id",
+            "order_number", "order_item_id",
             # request info
             "reason", "status",
             # refund info
             "refund_amount", "user_upi", "refund_method", "refund_method_display",
-            # pickup/warehouse/admin
+            # pickup / warehouse / admin
             "pickup_verified_by_name", "pickup_comment", "pickup_status_display",
             "warehouse_decision", "warehouse_comment", "warehouse_status_display",
             "admin_comment", "admin_status_display",
@@ -63,6 +72,9 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             "shipping_address", "delivery_charge",
             "return_days_remaining",
             "is_refunded", "refunded_at_human",
+            # new fields
+            'payment_id', 'currency', 'pickup_collected_at',
+            'warehouse_processed_at', 'admin_processed_at'
         ]
         read_only_fields = [
             "order", "order_item",
@@ -77,7 +89,7 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
 
         if self.instance is None:  # Only on create
-            order = attrs.get("order_id")
+            order = attrs.get("order_number")
             order_item = attrs.get("order_item_id")
 
             if not order or not order_item:
@@ -116,7 +128,7 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
 
     # --- Creation ---
     def create(self, validated_data):
-        order = validated_data.pop("order_id")
+        order = validated_data.pop("order_number")
         order_item = validated_data.pop("order_item_id")
 
         user_upi = validated_data.pop("user_upi", "").strip()
@@ -148,7 +160,15 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             **validated_data
         )
         return instance
-
+    # --- Custom Getters for new fields ---
+    def get_pickup_collected_at(self, obj):
+        if obj.pickup_verified_by and hasattr(obj.pickup_verified_by, "collected_at"):
+            return obj.pickup_verified_by.collected_at
+        return None
+    def get_payment_id(self, obj):
+        return getattr(obj.order, "payment_id", None)
+    def get_currency(self, obj):
+        return getattr(obj.order, "currency", "INR") 
     # --- Custom Getters ---
     def get_refund_id(self, obj):
         return getattr(obj.order, "refund_id", None)
@@ -238,7 +258,7 @@ class ReplacementRequestSerializer(serializers.ModelSerializer):
     admin_status_display = serializers.SerializerMethodField(read_only=True)
 
     # --- Input fields ---
-    order_id = serializers.PrimaryKeyRelatedField(
+    order_number = serializers.PrimaryKeyRelatedField(
         queryset=Order.objects.all(), write_only=True, required=False
     )
     order_item_id = serializers.PrimaryKeyRelatedField(
@@ -250,7 +270,7 @@ class ReplacementRequestSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "order", "order_item", "new_order",
-            "order_id", "order_item_id",
+            "order_number", "order_item_id",
             "reason", "status","pickup_status",
             "pickup_verified_by_name", "pickup_comment", "pickup_status_display",
             "warehouse_decision", "warehouse_comment", "warehouse_status_display",
@@ -273,7 +293,7 @@ class ReplacementRequestSerializer(serializers.ModelSerializer):
             order = self.instance.order
             order_item = self.instance.order_item
         else:  # create
-            order = attrs.get("order_id")
+            order = attrs.get("order_number")
             order_item = attrs.get("order_item_id")
 
             if not order or not order_item:
@@ -284,7 +304,7 @@ class ReplacementRequestSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("You can only request a replacement for your own orders.")
 
             # Creation-only validations
-            if order_item.order_id != order.id:
+            if order_item.order != order:
                 raise serializers.ValidationError("Order item does not belong to this order.")
             if order.status.lower() != "delivered":
                 raise serializers.ValidationError("Replacement requests can only be created for delivered orders.")
@@ -303,14 +323,14 @@ class ReplacementRequestSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("A replacement request already exists for this item.")
 
         # ✅ Common validations for both create and update
-        if order_item.order_id != order.id:
+        if order_item.order.order_number != order.order_number:
             raise serializers.ValidationError("Order item does not belong to this order.")
 
         return attrs
 
 
     def create(self, validated_data):
-        order = validated_data.pop("order_id")
+        order = validated_data.pop("order_number")
         order_item = validated_data.pop("order_item_id")
 
         instance = ReplacementRequest.objects.create(

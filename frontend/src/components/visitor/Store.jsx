@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from "react";
 import axiosInstance from "../../api/axiosinstance";
 import { toast } from "react-toastify";
-import Category from '../../components/visitor/Category.jsx';
-import FeaturedShimmer from '../../shimmer/FeaturedShimmer.jsx';
+import Category from "../../components/visitor/Category.jsx";
+import FeaturedShimmer from "../../shimmer/FeaturedShimmer.jsx";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import CustomSortDropdown from "../helpers/CustomSortDropDown.jsx";
+import { motion } from "framer-motion";
 
 const Store = () => {
   const { categorySlug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
-  
+
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
@@ -31,7 +32,6 @@ const Store = () => {
         is_available: availableFilter ? true : undefined,
         ordering: ordering || undefined,
       };
-
       const res = await axiosInstance.get("products/", { params });
       setProducts(res.data.results || res.data);
     } catch (error) {
@@ -48,15 +48,11 @@ const Store = () => {
       featured: featuredFilter ? "true" : undefined,
       is_available: availableFilter ? "true" : undefined,
       ordering: ordering || undefined,
-      ...newFilters
+      ...newFilters,
     };
-
-    Object.keys(updated).forEach(key => {
-      if (updated[key] === undefined || updated[key] === false) {
-        delete updated[key];
-      }
+    Object.keys(updated).forEach((key) => {
+      if (updated[key] === undefined || updated[key] === false) delete updated[key];
     });
-
     setSearchParams(updated);
   };
 
@@ -65,180 +61,173 @@ const Store = () => {
   }, [categorySlug, searchQuery, featuredFilter, availableFilter, ordering]);
 
   const handleCategorySelect = (slug) => {
-    navigate(slug ? `/store/${slug}` : '/store');
+    navigate(slug ? `/store/${slug}` : "/store");
   };
-  console.log(products);
-  
+
   return (
-    <>
-  {/* Custom animation keyframes */}
-  <style>
-    {`
-      @keyframes fadeSlideUp {
-        0% { opacity: 0; transform: translateY(20px); }
-        100% { opacity: 1; transform: translateY(0); }
-      }
-    `}
-  </style>
-
-  <div className="px-4 sm:px-8 lg:px-12 py-6 sm:py-8">
-    {/* Page Heading */}
-    <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900 mb-8 border-b-2 border-[#155dfc] pb-4">
-      Store
-    </h2>
-
-    <div className="flex flex-col md:flex-row gap-8">
-      {/* Sidebar for Desktop */}
-      <aside className="hidden md:block w-full md:w-64 md:sticky md:top-24 self-start p-4 sm:p-6 bg-white rounded-xl shadow-lg border border-gray-200 z-10">
-        <Category
-          selectedCategorySlug={categorySlug}
-          onSelectCategory={handleCategorySelect}
-        />
-      </aside>
-
-      {/* Mobile Category Dropdown */}
-      <div className="md:hidden px-4 mb-4">
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="w-full bg-[#155dfc] text-white rounded-lg py-2 font-semibold"
-        >
-          {showFilters ? "Hide Categories" : "Show Categories"}
-        </button>
-
-        {showFilters && (
-          <div className="mt-2 bg-white rounded-xl shadow-md border border-gray-200 p-4">
-            <Category
-              selectedCategorySlug={categorySlug}
-              onSelectCategory={handleCategorySelect}
-            />
-          </div>
-        )}
+    <div className="px-4 sm:px-8 lg:px-12 py-6 sm:py-10">
+      {/* Hero Section */}
+      <div className="text-center mb-10 relative">
+        <h1 className="text-4xl sm:text-5xl font-extrabold mb-4 text-gray-900">
+          Discover Our Collection
+        </h1>
+        <p className="text-lg text-gray-600 mb-6">
+          Handpicked products just for you
+        </p>
+        {/* Search bar separated from gradient */}
+        <div className="max-w-lg mx-auto">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => updateFilters({ search: e.target.value })}
+            placeholder="Search products..."
+            className="w-full px-5 py-3 rounded-2xl text-gray-800 shadow-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition duration-300"
+          />
+        </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Filters */}
-        <div className="w-full bg-white rounded-xl shadow-md border border-gray-200 p-4 sm:p-6 mb-6 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 sm:gap-6">
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
-            {/* Featured Only */}
-            <label className="flex items-center cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={featuredFilter}
-                onChange={e =>
-                  updateFilters({ featured: e.target.checked ? "true" : undefined })
-                }
-                className="form-checkbox h-5 w-5 text-indigo-600 rounded transition duration-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Sidebar */}
+        <aside className="hidden md:block w-full md:w-64 sticky top-24 self-start p-5 bg-white rounded-3xl shadow-xl border border-gray-100 overflow-y-auto max-h-[80vh]">
+          <Category
+            selectedCategorySlug={categorySlug}
+            onSelectCategory={handleCategorySelect}
+          />
+        </aside>
+
+        {/* Mobile Filters */}
+        <div className="md:hidden mb-4">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="w-full bg-indigo-600 text-white rounded-2xl py-2 font-semibold shadow-md"
+          >
+            {showFilters ? "Hide Categories" : "Show Categories"}
+          </button>
+          {showFilters && (
+            <div className="mt-3 bg-white rounded-2xl shadow-md p-5 border border-gray-200">
+              <Category
+                selectedCategorySlug={categorySlug}
+                onSelectCategory={handleCategorySelect}
               />
-              <span className="ml-2 text-gray-700 font-semibold hover:text-indigo-600 transition-colors">
-                Featured Only
-              </span>
-            </label>
+            </div>
+          )}
+        </div>
 
-            {/* Available Only */}
-            <label className="flex items-center cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={availableFilter}
-                onChange={e =>
-                  updateFilters({ is_available: e.target.checked ? "true" : undefined })
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col">
+          {/* Filter Bar */}
+          <div className="w-full bg-white rounded-3xl shadow-md border border-gray-100 p-5 mb-6 flex flex-wrap items-center gap-4 justify-between">
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() =>
+                  updateFilters({ featured: featuredFilter ? undefined : "true" })
                 }
-                className="form-checkbox h-5 w-5 text-indigo-600 rounded transition duration-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              />
-              <span className="ml-2 text-gray-700 font-semibold hover:text-indigo-600 transition-colors">
-                Available Only
-              </span>
-            </label>
-          </div>
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  featuredFilter
+                    ? "bg-indigo-600 text-white shadow-md"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Featured
+              </button>
 
+              <button
+                onClick={() =>
+                  updateFilters({ is_available: availableFilter ? undefined : "true" })
+                }
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  availableFilter
+                    ? "bg-green-600 text-white shadow-md"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                In Stock
+              </button>
+            </div>
 
-          <div className="w-full sm:w-auto relative">
-            <div className="relative">
+            <div>
               <CustomSortDropdown ordering={ordering} updateFilters={updateFilters} />
             </div>
           </div>
 
-        </div>
+          {/* Product Grid */}
+          <section>
+            {loadingProducts ? (
+              <FeaturedShimmer />
+            ) : products.length > 0 ? (
+              <motion.div layout className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {products.map((product, i) => {
+                  const imageUrl = product.image_url || product.category?.image_url;
+                  const prices = product.variants.map((v) =>
+                    parseFloat(v.final_price || v.offer_price || v.base_price || "0")
+                  );
+                  const lowestPrice = prices.length > 0 ? Math.min(...prices) : null;
+                  const isNew =
+                    new Date(product.created_at) >=
+                    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-        {/* Products */}
-        <section>
-          {loadingProducts ? (
-            <FeaturedShimmer />
-          ) : products.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {products.map((product, i) => {
-                const imageUrl = product.image_url || product.category?.image_url;
-
-                const prices = product.variants.map(v =>
-                  parseFloat(v.final_price || v.offer_price || v.base_price || "0")
-                );
-                const lowestPrice = prices.length > 0 ? Math.min(...prices) : null;
-
-                const isNew = new Date(product.created_at) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-                return (
-                  <div
-                    key={product.id}
-                    className="bg-white rounded-3xl shadow-lg overflow-hidden flex flex-col transition-all duration-300 hover:shadow-indigo-300 hover:scale-[1.025] cursor-pointer z-0 animate-[fadeSlideUp_0.5s_ease_forwards] opacity-0"
-                    style={{ animationDelay: `${i * 100}ms` }}
-                  >
-                    <Link to={`/products/${product.slug}`} className="block group">
-                      <div className="relative aspect-[4/3] overflow-hidden z-0">
-                        <img
-                          src={imageUrl}
-                          alt={product.name}
-                          loading="lazy"
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 "
-                        />
-                        {product.featured && (
-                          <span className="absolute top-2 left-2 bg-gradient-to-r from-yellow-500 to-yellow-400 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full shadow-md">
-                            Featured
-                          </span>
-                        )}
-                        {isNew && (
-                          <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] font-semibold uppercase px-2 py-1 rounded-full shadow-md">
-                            New
-                          </span>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      </div>
-
-                      <div className="p-5 flex flex-col flex-grow">
-                        <h3
-                          className="text-sm sm:text-base md:text-base font-serif font-semibold tracking-wide text-gray-900 text-balance truncate capitalize"
-                          title={product.name}
-                        >
-                          {product.name}
-                        </h3>
-
-                        {lowestPrice !== null && (
-                          <div className="mt-3 flex items-center justify-between">
-                            <span className="text-base sm:text-lg font-bold text-gray-900 drop-shadow-sm">
-                              From ₹{lowestPrice.toFixed(2)}
+                  return (
+                    <motion.div
+                      key={product.id}
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="bg-white rounded-3xl shadow-lg overflow-hidden flex flex-col hover:shadow-2xl transition-all duration-300 group"
+                    >
+                      <Link to={`/products/${product.slug}`} className="block group">
+                        <div className="relative aspect-[4/3] overflow-hidden">
+                          <img
+                            src={imageUrl}
+                            alt={product.name}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          />
+                          {product.featured && (
+                            <span className="absolute top-2 left-2 bg-yellow-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow">
+                              Featured
                             </span>
-                            {product.variants.length > 1 && (
-                              <span className="text-[10px] sm:text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-full shadow-sm">
-                                {product.variants.length} options
+                          )}
+                          {isNew && (
+                            <span className="absolute top-2 right-2 bg-pink-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow">
+                              New
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="p-5 flex flex-col flex-grow">
+                          <h3
+                            className="text-base font-semibold text-gray-900 truncate capitalize group-hover:text-indigo-600 transition"
+                            title={product.name}
+                          >
+                            {product.name}
+                          </h3>
+
+                          {lowestPrice !== null && (
+                            <div className="mt-3 flex items-center justify-between">
+                              <span className="text-lg font-bold text-gray-900">
+                                From ₹{lowestPrice.toFixed(2)}
                               </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center text-gray-500 mt-20">
-              <p className="text-xl font-medium">No products available</p>
-            </div>
-          )}
-        </section>
+                              {product.variants.length > 1 && (
+                                <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                                  {product.variants.length} options
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            ) : (
+              <div className="text-center text-gray-500 mt-20">
+                <p className="text-xl font-medium">No products available</p>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </div>
-  </div>
-</>
   );
 };
 

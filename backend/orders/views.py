@@ -3,6 +3,7 @@ import logging
 from django_filters.rest_framework import DjangoFilterBackend
 
 from rest_framework.filters import SearchFilter
+from admin_dashboard.utils import  create_warehouse_log
 
 from .serializers import (OrderSerializer,
                           ShippingAddressSerializer,
@@ -14,7 +15,7 @@ from .serializers import (OrderSerializer,
                         OrderItemSerializer,
                         OrderSummarySerializer,
                         OrderDetailSerializer,
-                        OrderSerializer)
+                        )
 
 from rest_framework.generics import (ListAPIView,RetrieveAPIView,ListCreateAPIView,
                                     RetrieveUpdateDestroyAPIView)
@@ -37,12 +38,15 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 import logging
 from .utils import (create_order_with_items,
+                    
                     validate_payment_method,
                     process_refund)
 
 from .helpers import( validate_shipping_address,
                     prepare_order_response,
+                    process_checkout,
                     validate_promoter,
+                    verify_razorpay_payment,
                     calculate_order_preview)
 
 
@@ -74,38 +78,31 @@ class ReferralCheckoutAPIView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        user = request.user
         serializer = ReferralCheckoutInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        # Validate shipping address
-        shipping_address = validate_shipping_address(user, data.get("shipping_address") or data.get("shipping_address_id"))
-
-        # Validate promoter
-        promoter = validate_promoter(request.query_params.get("ref"))
-
-        # Validate payment method
-        payment_method = validate_payment_method(data.get("payment_method"))
-
-        # Create order
-        order, razorpay_order = create_order_with_items(
-            user=user,
+        result = process_checkout(
+            user=request.user,
             items=data.get("items"),
-            shipping_address=shipping_address,
-            payment_method=payment_method,
-            promoter=promoter
+            shipping_address_input=data.get("shipping_address") or data.get("shipping_address_id"),  # <-- fixed
+            payment_method=data.get("payment_method"),
+            promoter_code=request.query_params.get("ref"),
+            is_cart=False
         )
 
-        return Response(prepare_order_response(order, razorpay_order), status=status.HTTP_201_CREATED if not razorpay_order else status.HTTP_200_OK)
+        return Response(
+            result["response"],
+            status=status.HTTP_201_CREATED if result["order"].payment_method == "Cash on Delivery" else status.HTTP_200_OK
+        )
+
 
 class CartCheckoutAPIView(APIView):
     permission_classes = [IsCustomer]
 
     @transaction.atomic
     def post(self, request):
-        user = request.user
-        cart_items = CartItem.objects.filter(cart__user=user)
+        cart_items = CartItem.objects.filter(cart__user=request.user)
         if not cart_items.exists():
             return Response({"detail": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -113,28 +110,22 @@ class CartCheckoutAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        shipping_address = validate_shipping_address(user, data.get("shipping_address") or data.get("shipping_address_id"))
-        promoter = validate_promoter(data.get("referral_code"))
-        payment_method = validate_payment_method(data.get("payment_method"))
-
-        order, razorpay_order = create_order_with_items(
-            user=user,
+        result = process_checkout(
+            user=request.user,
             items=cart_items,
-            shipping_address=shipping_address,
-            payment_method=payment_method,
-            promoter=promoter
+            shipping_address_input=data.get("shipping_address") or data.get("shipping_address_id"),
+            payment_method=data.get("payment_method"),
+            promoter_code=data.get("referral_code"),
+            is_cart=True
         )
 
-        if payment_method == "Cash on Delivery":
-            cart_items.delete()
-
-        return Response(prepare_order_response(order, razorpay_order), status=status.HTTP_201_CREATED if not razorpay_order else status.HTTP_200_OK)
+        return Response(result["response"], status=status.HTTP_201_CREATED if result["order"].payment_method=="Cash on Delivery" else status.HTTP_200_OK)
 
 
 class OrderDetailAPIView(RetrieveAPIView):
     serializer_class=OrderDetailSerializer
     permission_classes=[IsCustomer]
-    lookup_field='id'
+    lookup_field='order_number'
 
 
     def get_queryset(self):
@@ -148,48 +139,34 @@ class OrderPaymentAPIView(APIView):
     permission_classes = [IsCustomer]
 
     @transaction.atomic
-    def post(self, request, id):
+    def post(self, request, order_number):
         user = request.user
-        order = get_object_or_404(Order, id=id, user=user)
+        order = get_object_or_404(Order, order_number=order_number, user=user)
 
         if order.is_paid:
             raise ValidationError("Order is already paid")
 
         method = request.data.get("payment_method", "Cash on Delivery").strip()
-        validate_payment_method(method)
 
-        order.payment_method = method
-        order.razorpay_payment_id = request.data.get("razorpay_payment_id")
+        # Use the unified checkout helper
+        result = process_checkout(
+            user=user,
+            existing_order=order,
+            payment_method=method
+        )
 
-        if method == "Cash on Delivery":
-            order.status = "pending"
-        else:
-            order.is_paid = True
-            order.paid_at = timezone.now()
-            order.status = "processing"
-            from promoter.utils import apply_promoter_commission
-            apply_promoter_commission(order)
-
-        order.save()
-        return Response({
-            "message": "Order confirmed",
-            "order_id": order.id,
-            "payment_method": order.payment_method,
-            "is_paid": order.is_paid,
-            "paid_at": order.paid_at,
-            "status": order.status
-        })
+        return Response(result['response'])
 
 
 class CancelOrderAPIView(APIView):
     permission_classes = [IsAdminOrCustomer]
 
     @transaction.atomic
-    def post(self, request, id):
+    def post(self, request, order_number):
         user = request.user
         role = getattr(user,'role',None)
         try:
-            order=Order.objects.get(id=id) if role == 'admin' else Order.objects.get(id=id,user=user)
+            order = Order.objects.get(order_number=order_number) if role == 'admin' else Order.objects.get(order_number=order_number, user=user)
         except Order.DoesNotExist:
             raise ValidationError('order not found')
 
@@ -206,6 +183,7 @@ class CancelOrderAPIView(APIView):
 
             item.status='cancelled'
             item.save(update_fields=['status'])
+            create_warehouse_log(item,updated_by=user,comment="order cancelled")
 
         order.status = "cancelled"
         order.cancel_reason = request.data.get('cancel_reason','')
@@ -224,7 +202,7 @@ class CancelOrderAPIView(APIView):
             "success": True,
             "message": "Order cancelled successfully",
             "order": {
-                "id": order.id,
+               "order_number": order.order_number,
                 "status": order.status,
                 "payment_method": order.payment_method,
                 "is_paid": order.is_paid,
@@ -243,28 +221,20 @@ class CancelOrderAPIView(APIView):
 class RazorpayOrderCreateAPIView(APIView):
     permission_classes = [IsCustomer]
 
-    def post(self, request, id):
-        order = get_object_or_404(Order, id=id, user=request.user)
+    @transaction.atomic
+    def post(self, request, order_number):
+        order = get_object_or_404(Order, order_number=order_number, user=request.user)
+
         if order.is_paid or order.status.lower() in ["processing", "delivered", "cancelled"]:
             raise ValidationError("Cannot initiate payment for this order")
 
-        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-        razorpay_order = client.order.create({
-            "amount": int(order.total * 100),
-            "currency": "INR",
-            "receipt": f"order_rcptid_{order.id}",
-            "payment_capture": 1
-        })
-        order.razorpay_order_id = razorpay_order.get("id")
-        order.save()
-        return Response({
-            "razorpay_order_id": razorpay_order.get("id"),
-            "razorpay_key": settings.RAZORPAY_KEY_ID,
-            "amount": razorpay_order.get("amount"),
-            "currency": razorpay_order.get("currency"),
-            "order": OrderSerializer(order).data
-        })
+        # Call helper without changing payment method (assume Razorpay)
+        result = process_checkout(user=request.user, existing_order=order)
 
+        return Response(result)
+
+
+# --------- RazorpayPaymentVerifyAPIView (input changed) ---------
 class RazorpayPaymentVerifyAPIView(APIView):
     permission_classes = [IsCustomer]
 
@@ -273,52 +243,40 @@ class RazorpayPaymentVerifyAPIView(APIView):
         razorpay_order_id = request.data.get("razorpay_order_id")
         razorpay_payment_id = request.data.get("razorpay_payment_id")
         razorpay_signature = request.data.get("razorpay_signature")
-        order_id = request.data.get("order_id")
+        order_number = request.data.get("order_number")
 
-        if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature, order_id]):
+        if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature, order_number]):
             raise ValidationError("Missing Razorpay payment details")
 
+        order = get_object_or_404(Order, order_number=order_number, user=request.user)
+
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-        try:
-            client.utility.verify_payment_signature({
-                "razorpay_order_id": razorpay_order_id,
-                "razorpay_payment_id": razorpay_payment_id,
-                "razorpay_signature": razorpay_signature
-            })
-        except razorpay.errors.SignatureVerificationError:
-            raise ValidationError("Invalid payment signature")
 
-        order = get_object_or_404(Order, id=order_id, user=request.user)
-        if order.is_paid:
-            return Response({"message": "Order already marked as paid"})
+        result = verify_razorpay_payment(
+            order=order,
+            razorpay_order_id=razorpay_order_id,
+            razorpay_payment_id=razorpay_payment_id,
+            razorpay_signature=razorpay_signature,
+            user=request.user,
+            client=client
+        )
 
-        order.razorpay_payment_id = razorpay_payment_id
-        order.razorpay_order_id = razorpay_order_id
-        order.is_paid = True
-        order.paid_at = timezone.now()
-        order.status = "processing"
-        order.payment_method = "Razorpay"
-        order.save()
+        return Response(result)
 
-        from promoter.utils import apply_promoter_commission
-        apply_promoter_commission(order)
-        CartItem.objects.filter(cart__user=request.user).delete()
 
-        return Response({"message": "Payment verified and order updated"})
- 
+# --------- OrderItemListAPIView (filter/search on order_number) ---------
 class OrderItemListAPIView(ListAPIView):
     permission_classes = [IsWarehouseStaffOrAdmin]
     serializer_class = OrderItemSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['status', 'order__id']
-    search_fields = ['product_variant__product__name', 'order__id']
+    filterset_fields = ['status', 'order__order_number']  # ✅ changed
+    search_fields = ['product_variant__product__name', 'order__order_number']  # ✅ changed
 
     def get_queryset(self):
         logger = logging.getLogger(__name__)
         statuses = self.request.query_params.getlist('status')
         include_cancelled = self.request.query_params.get('include_cancelled', 'false').lower() == 'true'
 
-        # Default statuses if none provided
         if not statuses:
             statuses = ['pending', 'picked', 'packed']
             logger.info(f"No status filter provided. Defaulting to {statuses}")
@@ -326,12 +284,10 @@ class OrderItemListAPIView(ListAPIView):
         queryset = OrderItem.objects.select_related('order', 'product_variant__product')
 
         if include_cancelled:
-            # Include items from cancelled orders
             queryset = queryset.filter(
                 models.Q(status__in=statuses) | models.Q(order__status='cancelled')
             )
         else:
-            # Exclude cancelled orders
             queryset = queryset.filter(
                 status__in=statuses,
                 order__status__in=['pending', 'processing', 'shipped']
@@ -343,9 +299,6 @@ class OrderItemListAPIView(ListAPIView):
                      f"with statuses: {statuses}, include_cancelled={include_cancelled}")
         return queryset
 
-
-
-  
 class OrderSummaryListAPIView(ListAPIView):
     serializer_class = OrderSummarySerializer
     permission_classes = [IsWarehouseStaffOrAdmin | IsDeliveryManOrAdmin]
@@ -427,53 +380,49 @@ class BuyNowAPIView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        user = request.user
         items = request.data.get("items", [])
-        shipping_address_input = request.data.get("shipping_address") or request.data.get("shipping_address_id")
-        payment_method = request.data.get("payment_method", "").strip()
-
-        # Validate items
         if not items or not isinstance(items, list):
             return Response({"detail": "No valid items provided."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Basic validation
         for item in items:
             if "product_variant_id" not in item or "quantity" not in item or int(item["quantity"]) <= 0:
                 return Response({"detail": "Invalid items or quantity"}, status=status.HTTP_400_BAD_REQUEST)
 
-        shipping_address = validate_shipping_address(user, shipping_address_input)
-        validate_payment_method(payment_method)
+        shipping_address_input = request.data.get("shipping_address") or request.data.get("shipping_address_id")
+        payment_method = request.data.get("payment_method", "").strip()
 
-        order, razorpay_order = create_order_with_items(
-            user=user,
+        result = process_checkout(
+            user=request.user,
             items=items,
-            shipping_address=shipping_address,
-            payment_method=payment_method
+            shipping_address_input=shipping_address_input,
+            payment_method=payment_method,
+            is_cart=False
         )
 
-        return Response(prepare_order_response(order, razorpay_order), status=status.HTTP_201_CREATED if not razorpay_order else status.HTTP_200_OK)
+        return Response(result["response"], status=status.HTTP_201_CREATED if result["order"].payment_method=="Cash on Delivery" else status.HTTP_200_OK)
 
+
+# --------- OrderListAPIView (customer-facing response) ---------
 class OrderListAPIView(ListAPIView):
     serializer_class = CustomerOrderListSerializer
     permission_classes = [IsCustomer]
     filter_backends = [OrderingFilter]
     ordering_fields = ["created_at", "delivered_at", "updated_at"]
-    ordering = ["-created_at"]  # default: latest first
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         user = self.request.user
         queryset = Order.objects.filter(user=user)
 
-        # Filter by status
         status_filter = self.request.query_params.get("status")
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        # Filter by refund status
         refunded_filter = self.request.query_params.get("is_refunded")
         if refunded_filter in ["true", "false"]:
             queryset = queryset.filter(is_refunded=(refunded_filter == "true"))
 
-        # Filter by date range
         start_date = self.request.query_params.get("start")
         end_date = self.request.query_params.get("end")
         if start_date and end_date:
@@ -482,6 +431,7 @@ class OrderListAPIView(ListAPIView):
             )
 
         return queryset
+
 
 class OrderPreviewAPIView(APIView):
     permission_classes = [IsCustomer]

@@ -48,11 +48,11 @@ urlpatterns = [
 
     # 📦 Customer Order APIs
     path('orders/', OrderListAPIView.as_view(), name='orders-list'),
-    path('orders/<int:id>/', OrderDetailAPIView.as_view(), name='orders-detail'),
+    path('orders/<str:order_number>/', OrderDetailAPIView.as_view(), name='orders-detail'),
     path('orders/summary/', OrderSummaryListAPIView.as_view(), name='orders-summary'),
-    path('orders/<int:id>/pay/', OrderPaymentAPIView.as_view(), name='orders-pay'),
-    path('orders/<int:id>/cancel/', CancelOrderAPIView.as_view(), name='orders-cancel'),
-    path('orders/<int:id>/razorpay/', RazorpayOrderCreateAPIView.as_view(), name='orders-razorpay-create'),
+    path('orders/<str:order_number>/pay/', OrderPaymentAPIView.as_view(), name='orders-pay'),
+    path('orders/<str:order_number>/cancel/', CancelOrderAPIView.as_view(), name='orders-cancel'),
+    path('orders/<str:order_number>/razorpay/', RazorpayOrderCreateAPIView.as_view(), name='orders-razorpay-create'),
     path('orders/razorpay/verify/', RazorpayPaymentVerifyAPIView.as_view(), name='orders-razorpay-verify'),
     
     # 🚚 Warehouse Item APIs
@@ -74,7 +74,7 @@ urlpatterns = [
     # Details of a single return request
     # urls.py
     path("returns/<int:pk>/", ReturnRequestDetailAPIView.as_view()),
-    path("refund-status/<int:order_id>/", RefundStatusAPIView.as_view(), name="refund-status"),
+    path("refund-status/<int:order_number>/", RefundStatusAPIView.as_view(), name="refund-status"),
 
     path("cod-refund/confirm/<int:order_id>/", ConfirmCODRefundAPIView.as_view(), name="confirm-cod-refund"),
 

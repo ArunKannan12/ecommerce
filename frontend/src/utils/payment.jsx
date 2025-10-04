@@ -14,46 +14,25 @@ const loadRazorpayScript = () =>
   });
 
 export const handleRazorpayPayment = async ({
-  orderId,
-  items,
-  shipping_address,
-  payment_method = "Razorpay",
-  isBuyNowFlow = false,
+  razorpay_order_id,
+  amount,
+  currency,
+  razorpay_key,
+  orderNumber,
   onSuccess,
 }) => {
   try {
     await loadRazorpayScript();
 
-    if (!orderId) {
-      if (!items || !shipping_address) {
-        throw new Error("Items and shipping address are required for new orders");
-      }
-
-      const endpoint = isBuyNowFlow ? "checkout/buy-now/" : "checkout/cart/";
-      const payload = {
-        items,
-        payment_method,
-        ...(typeof shipping_address === "object"
-          ? { shipping_address }
-          : { shipping_address_id: shipping_address }),
-      };
-
-      const orderRes = await axiosInstance.post(endpoint, payload);
-
-      orderId = orderRes.data.order?.id || orderRes.data.id;
-    }
-
-    const razorpayRes = await axiosInstance.post(`orders/${orderId}/razorpay/`);
-    const { razorpay_order_id, amount, currency, razorpay_key } = razorpayRes.data;
-
-    if (!razorpay_order_id) throw new Error("Failed to get Razorpay order ID from backend");
+    if (!razorpay_order_id) throw new Error("Razorpay order ID is required");
 
     return new Promise((resolve, reject) => {
       const options = {
         key: razorpay_key,
-        amount,
+        amount:Math.round(amount),
         currency,
-        name: "My Shop",
+        name: "Beston Connect",
+        description: `Payment for order ${orderNumber}`,
         order_id: razorpay_order_id,
         handler: async (response) => {
           try {
@@ -61,17 +40,17 @@ export const handleRazorpayPayment = async ({
               razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
-              order_id: orderId,
+              order_number: orderNumber, // backend expects order_number
             };
 
             await axiosInstance.post("orders/razorpay/verify/", payload);
-            toast.success("Payment successful!");
-            if (onSuccess) onSuccess(orderId);
-            resolve(orderId);
-          } catch (err) {
-            console.error(err);
-            toast.error(err.response?.data?.detail || "Payment verification failed");
-            reject(err);
+            toast.success("Payment successful & verified");
+            if (onSuccess) onSuccess(orderNumber);
+            resolve(orderNumber);
+          } catch (error) {
+            console.error(error);
+            toast.error(error.response?.data?.detail || "Payment verification failed");
+            reject(error);
           }
         },
         modal: {

@@ -15,7 +15,7 @@ class OrderItemInline(admin.TabularInline):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "user", "status", "total", "delivery_charge",
+        "order_number", "user", "status", "total", "delivery_charge",
         "payment_method", "is_paid", "paid_at", "created_at"
     )
     list_filter = ("status", "is_paid", "payment_method", "created_at")
@@ -104,3 +104,4 @@ class NotificationAdmin(admin.ModelAdmin):
         "updated_at",
     )
     ordering = ("-created_at",)
+

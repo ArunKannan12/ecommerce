@@ -10,7 +10,8 @@ const Profile = () => {
   const [showModal, setShowModal] = useState(false);
   const [location, setLocation] = useState(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
-
+  console.log(user,'user');
+  
   if (loading || !user) {
     return (
       <ProfileShimmer/>
@@ -75,6 +76,29 @@ const Profile = () => {
         <span className="inline-block mt-2 px-4 py-1 bg-gray-700 text-white text-xs rounded-full uppercase tracking-wide">
           {user.role}
         </span>
+            {/* New status badges */}
+        <div className="flex justify-center gap-2 mt-2 flex-wrap">
+          {user.is_verified ? (
+            <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full uppercase tracking-wide">
+              Verified ✅
+            </span>
+          ) : (
+            <span className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full uppercase tracking-wide">
+              Not Verified ⚠️
+            </span>
+          )}
+
+          {user.is_active ? (
+            <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded-full uppercase tracking-wide">
+              Active
+            </span>
+          ) : (
+            <span className="px-2 py-1 bg-red-600 text-white text-xs rounded-full uppercase tracking-wide">
+              Inactive ❌
+            </span>
+          )}
+        </div>
+
         <p className="text-xs text-gray-400 mt-1 italic">
           Signed in via {user.auth_provider}
         </p>

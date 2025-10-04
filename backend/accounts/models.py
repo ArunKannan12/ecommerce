@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-from django.conf import settings
 
 AUTH_PROVIDERS = [
     ('email', 'Email'),
@@ -68,7 +67,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     updated_at = models.DateTimeField(auto_now=True)
 
     social_auth_pro_pic=models.URLField(blank=True,null=True)
-    custom_user_profile=models.ImageField( upload_to=user_profile_upload_path,blank=True,null=True)
+    custom_user_profile = models.URLField(max_length=500, blank=True, null=True)
 
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
@@ -103,8 +102,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def get_short_name(self):
         return self.first_name
-
-
+    
 # models.py
 class ActivationEmailLog(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)

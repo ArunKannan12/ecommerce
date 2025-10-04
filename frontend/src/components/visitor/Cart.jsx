@@ -24,7 +24,6 @@ const Cart = () => {
   const [updateCartItem] = useUpdateCartItemMutation();
   const [removeCartItem] = useRemoveCartItemMutation();
 
-  // Delete confirmation state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -83,7 +82,12 @@ const Cart = () => {
   const cartItems = isAuthenticated ? authCartData || [] : guestCartItems;
   const loading = isAuthenticated ? authLoading : guestLoading;
 
-  const getImageUrl = (item) => item?.images?.[0]?.url || "/placeholder.png";
+  // 🟢 Helper: get image URL prioritizing variant images
+  const getImageUrl = (item) => {
+    if (item.images?.length > 0) return item.images[0]?.image_url || item.images[0]?.image;
+    if (item.primary_image_url) return item.primary_image_url;
+    return "/placeholder.png";
+  };
 
   // Quantity update
   const handleUpdateQuantity = (itemId, newQty) => {
@@ -110,13 +114,12 @@ const Cart = () => {
     }
   };
 
-  // Open confirmation modal for removing item
+  // Delete confirmation
   const confirmRemoveItem = (item) => {
     setItemToDelete(item);
     setDeleteConfirmOpen(true);
   };
 
-  // Handle deletion
   const handleDeleteItem = async () => {
     if (!itemToDelete) return;
     setDeleting(true);
@@ -152,122 +155,122 @@ const Cart = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <h1 className="text-3xl sm:text-4xl font-extrabold mb-8 text-gray-900 tracking-tight">
-    Your Cart
-  </h1>
+      <h1 className="text-3xl sm:text-4xl font-extrabold mb-8 text-gray-900 tracking-tight">
+        Your Cart
+      </h1>
 
-  {loading ? (
-    <CartShimmer count={3} />
-  ) : !cartItems.length ? (
-    <p className="text-center text-gray-500 text-lg">No items in your cart</p>
-  ) : (
-    <div className="space-y-6">
-      {cartItems.map((item) => (
-        <div
-          key={item.id}
-          className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-6 items-center border border-gray-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition bg-white"
-        >
-          {/* Product Image */}
-          <div className="w-full sm:w-32 md:w-28 lg:w-32">
-            <img
-              src={getImageUrl(item)}
-              alt={item.product_name || "Product"}
-              className="w-full h-full object-cover rounded-2xl"
-            />
-          </div>
-
-          {/* Product Info */}
-          <div className="space-y-2">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 capitalize truncate">
-              {item.product_name} - {item.variant_name || "Default"}
-            </h2>
-
-            <div className="flex flex-wrap items-center gap-3">
-              {item.offer_price && parseFloat(item.offer_price) < parseFloat(item.base_price) ? (
-                <>
-                  <p className="text-xl font-bold text-green-600">₹{item.final_price}</p>
-                  <p className="text-sm text-gray-400 line-through">₹{item.base_price}</p>
-                  <p className="text-sm text-red-500 font-semibold">
-                    {Math.round(((item.base_price - item.final_price) / item.base_price) * 100)}% OFF
-                  </p>
-                </>
-              ) : (
-                <p className="text-xl font-bold text-gray-900">₹{item.final_price}</p>
-              )}
-            </div>
-
-            <p className="text-sm text-gray-600">
-              Subtotal: ₹{(item.final_price * item.quantity).toFixed(2)}
-            </p>
-
-            {item.stock < 5 && (
-              <p className="text-sm font-medium text-red-600">Only {item.stock} left in stock!</p>
-            )}
-          </div>
-
-          {/* Quantity & Remove */}
-          <div className="flex flex-col items-end gap-3">
-            <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
-              <button
-                onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                disabled={item.quantity <= 1}
-                className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
-              >
-                −
-              </button>
-              <span className="font-medium text-gray-800">{item.quantity}</span>
-              <button
-                onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                disabled={item.quantity >= item.stock}
-                className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
-              >
-                +
-              </button>
-            </div>
-
-            <button
-              onClick={() => confirmRemoveItem(item)}
-              className="px-4 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition font-medium"
+      {loading ? (
+        <CartShimmer count={3} />
+      ) : !cartItems.length ? (
+        <p className="text-center text-gray-500 text-lg">No items in your cart</p>
+      ) : (
+        <div className="space-y-6">
+          {cartItems.map((item) => (
+            <div
+              key={item.id}
+              className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-6 items-center border border-gray-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition bg-white"
             >
-              Remove
+              {/* Product Image */}
+              <div className="w-full sm:w-32 md:w-28 lg:w-32">
+                <img
+                  src={getImageUrl(item)}
+                  alt={item.product_name || "Product"}
+                  className="w-full h-full object-cover rounded-2xl"
+                />
+              </div>
+
+              {/* Product Info */}
+              <div className="space-y-2">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 capitalize truncate">
+                  {item.product_name} - {item.variant_name || "Default"}
+                </h2>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {item.offer_price && parseFloat(item.offer_price) < parseFloat(item.base_price) ? (
+                    <>
+                      <p className="text-xl font-bold text-green-600">₹{item.final_price}</p>
+                      <p className="text-sm text-gray-400 line-through">₹{item.base_price}</p>
+                      <p className="text-sm text-red-500 font-semibold">
+                        {Math.round(((item.base_price - item.final_price) / item.base_price) * 100)}% OFF
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xl font-bold text-gray-900">₹{item.final_price}</p>
+                  )}
+                </div>
+
+                <p className="text-sm text-gray-600">
+                  Subtotal: ₹{(item.final_price * item.quantity).toFixed(2)}
+                </p>
+
+                {item.stock < 5 && (
+                  <p className="text-sm font-medium text-red-600">Only {item.stock} left in stock!</p>
+                )}
+              </div>
+
+              {/* Quantity & Remove */}
+              <div className="flex flex-col items-end gap-3">
+                <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
+                  <button
+                    onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                    disabled={item.quantity <= 1}
+                    className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
+                  >
+                    −
+                  </button>
+                  <span className="font-medium text-gray-800">{item.quantity}</span>
+                  <button
+                    onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                    disabled={item.quantity >= item.stock}
+                    className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => confirmRemoveItem(item)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition font-medium"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Cart Total & Checkout */}
+          <div className="mt-10 border-t border-gray-200 pt-6 bg-white rounded-2xl shadow-md p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Total: ₹{cartTotal.toFixed(2)}
+            </p>
+            <button
+              onClick={() => {
+                if (isAuthenticated) navigate("/checkout");
+                else {
+                  toast.info("Please log in as a customer to proceed to checkout");
+                  navigate("/login", { state: { from: "/checkout" } });
+                }
+              }}
+              className="px-8 py-3 bg-gradient-to-r from-[#155dfc] to-[#0f4bc4] text-white text-lg font-semibold rounded-2xl hover:opacity-90 transition"
+            >
+              Proceed to Checkout
             </button>
           </div>
         </div>
-      ))}
+      )}
 
-      {/* Cart Total & Checkout */}
-      <div className="mt-10 border-t border-gray-200 pt-6 bg-white rounded-2xl shadow-md p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <p className="text-2xl sm:text-3xl font-bold text-gray-900">
-          Total: ₹{cartTotal.toFixed(2)}
-        </p>
-        <button
-          onClick={() => {
-            if (isAuthenticated) navigate("/checkout");
-            else {
-              toast.info("Please log in as a customer to proceed to checkout");
-              navigate("/login", { state: { from: "/checkout" } });
-            }
-          }}
-          className="px-8 py-3 bg-gradient-to-r from-[#155dfc] to-[#0f4bc4] text-white text-lg font-semibold rounded-2xl hover:opacity-90 transition"
-        >
-          Proceed to Checkout
-        </button>
-      </div>
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteItem}
+        title="Confirm Delete"
+        message={`Are you sure you want to remove "${itemToDelete?.product_name}" from your cart?`}
+        confirmText="Yes, Delete"
+        cancelText="Cancel"
+        loading={deleting}
+      />
     </div>
-  )}
-
-  {/* Confirm Modal for deletion */}
-  <ConfirmModal
-    isOpen={deleteConfirmOpen}
-    onClose={() => setDeleteConfirmOpen(false)}
-    onConfirm={handleDeleteItem}
-    title="Confirm Delete"
-    message={`Are you sure you want to remove "${itemToDelete?.product_name}" from your cart?`}
-    confirmText="Yes, Delete"
-    cancelText="Cancel"
-    loading={deleting}
-  />
-</div>
   );
 };
 

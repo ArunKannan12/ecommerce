@@ -57,7 +57,7 @@ INSTALLED_APPS = [
     'storages',
     'cloudinary',
     'cloudinary_storage',
-
+    'django_extensions',
 
    
 ]
@@ -204,6 +204,32 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 5,  # Customize page size here
+}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "DEBUG",  # 👈 set DEBUG globally
+    },
+    "loggers": {
+        "admin_dashboard": {   # 👈 match the logger name you used
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",   # keep Django logs cleaner
+            "propagate": True,
+        },
+    },
 }
 
 from datetime import timedelta

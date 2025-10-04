@@ -7,7 +7,6 @@ from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError
 import razorpay
 from django.conf import settings
-
 from .models import Order, OrderItem, ShippingAddress
 from products.models import ProductVariant
 from promoter.models import Promoter
@@ -15,14 +14,10 @@ from cart.models import CartItem
 import razorpay
 from razorpay.errors import ServerError, BadRequestError, GatewayError, SignatureVerificationError
 from django.conf import settings
-
-
-
+from admin_dashboard.models import WarehouseLog
 from .serializers import OrderSerializer
 
 logger = logging.getLogger(__name__)
-
-
 
 def get_or_create_shipping_address(user, shipping_data):
     """Validate and get or create shipping address."""
@@ -135,52 +130,89 @@ def create_order_with_items(user, items, shipping_address, payment_method, promo
             razorpay_order = client.order.create({
                 'amount': int(order.total * 100),
                 'currency': 'INR',
-                'receipt': f"order_rcptid_{order.id}",
+                'receipt': f"order_rcptid_{order.order_number}",
                 'payment_capture': 1
             })
             order.tracking_number = razorpay_order.get('id')
             order.save()
-            logger.info(f"Razorpay order created: {razorpay_order.get('id')} for Order {order.id}")
+            logger.info(f"Razorpay order created: {razorpay_order.get('id')} for Order {order.order_number}")
         except Exception as e:
-            logger.error(f"Razorpay order creation failed for Order {order.id}: {str(e)}")
+            logger.error(f"Razorpay order creation failed for Order {order.order_number}: {str(e)}")
             raise ValidationError(f"Razorpay order creation failed: {str(e)}")
 
     return order, razorpay_order
 
 
-def update_order_status_from_items(order):
-    """Update order status based on associated item statuses."""
-    item_statuses = order.orderitem_set.values_list('status', flat=True)
+from django.utils import timezone
 
-    if all(status == 'shipped' for status in item_statuses):
-        order.status = 'shipped'
-        order.shipped_at = timezone.now()
+def update_order_status_from_items(order):
+    item_statuses = list(order.orderitem_set.values_list('status', flat=True))
+    print(f"[DEBUG] Order {order.order_number} item statuses: {item_statuses}")
+
+    if not item_statuses:
+        order.status = 'pending'
+        print(f"[DEBUG] No items found. Setting order status to 'pending'.")
+    elif all(status in ['cancelled', 'failed'] for status in item_statuses):
+        order.status = 'cancelled'
+        print(f"[DEBUG] All items cancelled/failed. Setting order status to 'cancelled'.")
+    elif all(status == 'delivered' for status in item_statuses):
+        order.status = 'delivered'
+        order.delivered_at = order.delivered_at or timezone.now()
+        print(f"[DEBUG] All items delivered. Setting order status to 'delivered'.")
+    elif all(status in ['shipped', 'out_for_delivery', 'delivered'] for status in item_statuses):
+        order.status = 'shipped'  # Keep order status valid
+        order.shipped_at = order.shipped_at or timezone.now()
+        print(f"[DEBUG] All items shipped/out_for_delivery/delivered. Setting order status to 'shipped'.")
     elif any(status in ['picked', 'packed'] for status in item_statuses):
         order.status = 'processing'
+        print(f"[DEBUG] Some items picked/packed. Setting order status to 'processing'.")
+    elif any(status == 'pending' for status in item_statuses):
+        if any(s in ['picked', 'packed', 'shipped', 'out_for_delivery'] for s in item_statuses):
+            order.status = 'processing'
+            print(f"[DEBUG] Mixed statuses with some pending. Setting order status to 'processing'.")
+        else:
+            order.status = 'pending'
+            print(f"[DEBUG] All items pending. Setting order status to 'pending'.")
     else:
-        order.status = 'pending'
+        print(f"[DEBUG] No matching condition. Order status unchanged: {order.status}")
 
-    order.save(update_fields=['status', 'shipped_at'])
+    order.save(update_fields=['status', 'shipped_at', 'delivered_at'])
+    print(f"[DEBUG] Final order status for {order.order_number}: {order.status}")
 
-
-def update_item_status(item_id, expected_status, new_status, user, timestamp_field=None):
-    """Mark an OrderItem as picked/packed/shipped."""
+    
+def update_item_status(item_id, expected_status, new_status, user, timestamp_field=None, comment=None):
+    """Mark an OrderItem as picked/packed/shipped/out_for_delivery with logging."""
     try:
-        item = OrderItem.objects.get(id=item_id)
+        item = OrderItem.objects.select_related("order").get(id=item_id)
     except OrderItem.DoesNotExist:
         raise ValidationError("Item not found")
 
     if item.status != expected_status:
-        raise ValidationError(f"Only items with status '{expected_status}' can be marked as '{new_status}'")
+        raise ValidationError(
+            f"Only items with status '{expected_status}' can be marked as '{new_status}'"
+        )
 
+    # ✅ update status + timestamp
     item.status = new_status
     if timestamp_field:
         setattr(item, timestamp_field, timezone.now())
     item.save(update_fields=['status'] + ([timestamp_field] if timestamp_field else []))
 
+    # ✅ create warehouse log with optional custom comment
+    WarehouseLog.objects.create(
+        order_item=item,
+        order=item.order,
+        action=new_status,
+        updated_by=user,
+        comment=comment or f"Status changed from '{expected_status}' to '{new_status}'"
+    )
+
+    # ✅ update order status
     update_order_status_from_items(item.order)
+
     logger.info(f"Item {item.id} marked as {new_status} by {user.email}")
     return item
+
 
 
 # -----------------------------
@@ -288,9 +320,9 @@ def process_refund(obj, amount=None):
         ])
         return None
 
-def check_refund_status(order_id):
+def check_refund_status(order_number):
     try:
-        order = Order.objects.get(id=order_id)
+        order = Order.objects.get(order_number=order_number)
 
         # ---------------- COD / UPI Refund ----------------
         if order.payment_method.lower() in ["cod", "cash on delivery"]:
@@ -306,7 +338,7 @@ def check_refund_status(order_id):
 
             return {
                 "success": True,
-                "order_id": order.id,
+                "order_number": order.order_number,
                 "refund_id": order.refund_id,
                 "refund_status": status,
                 "amount": float(getattr(order, "refund_amount", order.total)),
@@ -345,7 +377,7 @@ def check_refund_status(order_id):
 
             return {
                 "success": True,
-                "order_id": order.id,
+                "order_number": order.order_number,
                 "refund_id": refund.get("id", order.refund_id),
                 "refund_status": status,
                 "amount": refund.get("amount", Decimal(order.total) * 100) / 100,

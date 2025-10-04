@@ -1,11 +1,10 @@
-from .models import Order, OrderItem, ShippingAddress,ReturnRequest
+from .models import Order, OrderItem, ShippingAddress
 from rest_framework import serializers
 from products.serializers import ProductVariantSerializer
 from products.models import ProductVariant
 from promoter.serializers import PromoterSerializer
 from rest_framework.validators import UniqueTogetherValidator
 from promoter.models import Promoter
-from django.utils.timesince import timesince
 from django.utils import timezone
 from datetime import timedelta
 
@@ -30,14 +29,14 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
         ]
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    order_id = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all(), write_only=True)
+    order_number = serializers.CharField(source='order.order_number',read_only=True)
     product_variant = ProductVariantSerializer(read_only=True)
     product_variant_id = serializers.PrimaryKeyRelatedField(queryset=ProductVariant.objects.all(), write_only=True)
 
     class Meta:
         model = OrderItem
         fields = [
-            'id', 'order_id', 'product_variant', 'product_variant_id',
+            'id', 'order_number', 'product_variant', 'product_variant_id',
             'quantity', 'price', 'status', 'packed_at', 'shipped_at','delivered_at'
         ]
 
@@ -54,10 +53,11 @@ class OrderSerializer(serializers.ModelSerializer):
     )
     cancelled_by = serializers.StringRelatedField(read_only=True)
     items = OrderItemSerializer(many=True,source='orderitem_set',read_only=True)
+    order_number=serializers.CharField(read_only=True)
     class Meta:
         model = Order
         fields = [
-            'id', 'shipping_address', 'shipping_address_id',
+             'order_number','shipping_address', 'shipping_address_id',
             'status', 'subtotal', 'delivery_charge', 'total',
             'payment_method', 'is_paid', 'is_refunded',
             'tracking_number', 'shipped_at', 'delivered_at', 'paid_at',
@@ -166,18 +166,18 @@ class OrderItemStatusUpdateSerializer(serializers.Serializer):
 
 
 class OrderPaymentSerializer(serializers.Serializer):
-    order_id = serializers.UUIDField(required=True)
+    order_number = serializers.CharField(required=True)
     payment_method = serializers.ChoiceField(choices=['Cash on Delivery', 'razorpay'])
     razorpay_order_id = serializers.CharField(required=False, allow_blank=True)
     razorpay_payment_id = serializers.CharField(required=False, allow_blank=True)
     razorpay_signature = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs):
-        order_id = attrs.get('order_id')
+        order_number = attrs.get('order_number')
         payment_method = attrs.get('payment_method')
 
         try:
-            order = Order.objects.get(id=order_id, user=self.context['request'].user)
+            order = Order.objects.get(order_number=order_number, user=self.context['request'].user)
         except Order.DoesNotExist:
             raise serializers.ValidationError("Order not found.")
 
@@ -216,7 +216,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'id', 'shipping_address', 'status',
+            'order_number', 'shipping_address', 'status',
             'subtotal', 'delivery_charge', 'total',
             'payment_method', 'is_paid', 'is_refunded', 'is_restocked',  # 👈 added here
             'tracking_number', 'shipped_at', 'delivered_at', 'paid_at',
@@ -324,7 +324,7 @@ class OrderSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            "id", "shipping_address", "status",
+            "order_number", "shipping_address", "status",
             "subtotal", "delivery_charge", "total",
             "payment_method", "is_paid", "is_refunded",
             "tracking_number", "created_at", "updated_at", "first_item",
@@ -352,7 +352,7 @@ class CustomerOrderListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'id', 'shipping_address', 'status',
+            'order_number', 'shipping_address', 'status',
             'subtotal', 'delivery_charge', 'total',
             'payment_method', 'is_paid', 'is_refunded',
             'tracking_number', 'created_at', 'updated_at', 'items','refund_info'
@@ -404,7 +404,7 @@ class OrderPreviewOutputSerializer(serializers.Serializer):
 class OrderLightSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
-        fields = ['id','status','total','payment_method','created_at','is_paid','paid_at']
+        fields = ['order_number','status','total','payment_method','created_at','is_paid','paid_at']
 
 class OrderitemLightSerializer(serializers.ModelSerializer):
     product_variant=ProductVariantSerializer(read_only=True)
@@ -416,20 +416,20 @@ class OrderitemLightSerializer(serializers.ModelSerializer):
 
 
 class WarehouseOrderItemSerializer(serializers.ModelSerializer):
-    order_id=serializers.SerializerMethodField()
+    order_number = serializers.SerializerMethodField()
     product_name=serializers.SerializerMethodField()
     variant_name=serializers.SerializerMethodField()
 
     class Meta:
         model=OrderItem
         fields=[
-            'id','order_id','product_name','variant_name',
+            'id','order_number','product_name','variant_name',
             'quantity','price','status','packed_at','shipped_at',
             'failed_at','out_for_delivery_at'
         ]
 
-    def get_order_id(self, obj):
-        return obj.order.id if obj.order else None
+    def get_order_number(self, obj):
+        return obj.order.order_number if obj.order else None
 
     def get_product_name(self, obj):
         return obj.product_variant.product.name if obj.product_variant and hasattr(obj.product_variant, 'product') else None

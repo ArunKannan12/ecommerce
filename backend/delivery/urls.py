@@ -3,13 +3,12 @@ from .views import (
     MarkOrderDeliveredAPIView,
     ShippedOrderForDeliveryAPIView,
     DeliveryManRequestListCreateAPIView,
-    ApproveDeliveryManRequestAPIView,
-    RejectDeliveryManRequestAPIView,
     DeliveryManProfileUpdateAPIView,
     MarkOrderDeliveryFailedAPIView,
     SendDeliveryOTPAPIView,
     ResendDeliveryOTPAPIView,
-    VerifyDeliveryOTPAPIView
+    VerifyDeliveryOTPAPIView,
+    DeliveryManRequestRetrieveUpdateDestroyAPIView
 )
 
 urlpatterns = [
@@ -21,19 +20,15 @@ urlpatterns = [
     path("orders/shipped/",ShippedOrderForDeliveryAPIView.as_view(),name="shipped-orders"
     ),
 
-   
-
     # DeliveryMan Requests
-    path( "requests/", DeliveryManRequestListCreateAPIView.as_view(), name="deliveryman-request-list-create"
+    path( "request_for_deliveryman/", DeliveryManRequestListCreateAPIView.as_view(), name="deliveryman-request-list-create"
     ),
-
-    # Approve a deliveryman request (admin only)
-    path( "requests/<int:request_id>/approve/", ApproveDeliveryManRequestAPIView.as_view(), name="deliveryman-request-approve"
+    path(
+        "request_for_deliveryman/<int:id>/",
+        DeliveryManRequestRetrieveUpdateDestroyAPIView.as_view(),
+        name="deliveryman-request-detail",
     ),
-
-    # Reject a deliveryman request (admin only)
-    path("requests/<int:request_id>/reject/",RejectDeliveryManRequestAPIView.as_view(),name="deliveryman-request-reject"
-    ),
+    
     path("deliveryman/profile/", DeliveryManProfileUpdateAPIView.as_view(), name="deliveryman-profile"),
     
     path('delivery/send-otp/<int:item_id>/', SendDeliveryOTPAPIView.as_view(), name='send-delivery-otp'),

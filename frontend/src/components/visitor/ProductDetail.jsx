@@ -19,6 +19,7 @@ const ProductDetail = () => {
   const [currentImg, setCurrentImg] = useState(0);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [inCart,setInCart] = useState(false)
 
   const [addToCartMutation, { isLoading }] = useAddToCartMutation();
   const { refetch: refetchCart } = useGetCartQuery(undefined, { skip: !isAuthenticated });
@@ -31,7 +32,8 @@ const ProductDetail = () => {
         const res = await axiosInstance.get(`products/${productSlug}/`);
         const data = res.data;
         setProduct(data);
-              
+        console.log(data);
+        
         if (data.variants?.length > 0) setSelectedVariant(data.variants[0]);
 
         const relatedRes = await axiosInstance.get(`products/${productSlug}/related/`);
@@ -56,6 +58,22 @@ const ProductDetail = () => {
       return q;
     });
   };
+
+  useEffect(() => {
+  if (!selectedVariant) return;
+
+  if (!isAuthenticated) {
+    // 🔹 Guest user (localStorage cart)
+    const cart = JSON.parse(localStorage.getItem("cart")) || [];
+    setInCart(cart.some(item => item.product_variant_id === selectedVariant.id));
+  } else {
+    // 🔹 Logged-in user (API cart)
+    refetchCart().then((res) => {
+      const items = res?.data?.items || [];
+      setInCart(items.some(item => item.product_variant === selectedVariant.id));
+    });
+  }
+}, [selectedVariant, isAuthenticated, refetchCart]);
 
   // Guest cart helper (localStorage)
   const addToLocalCart = (variantId, quantity) => {
@@ -112,9 +130,12 @@ const ProductDetail = () => {
   if (loading || !product) return <ProductDetailShimmer />;
 
   const variantImageUrls =
-    selectedVariant?.images?.length > 0
-      ? selectedVariant.images.map(img => img?.url || img?.image || img?.image_url)
-      : product?.images?.map(img => img?.url || img?.image || img?.image_url) || [];
+  selectedVariant?.images?.length > 0
+    ? selectedVariant.images.map(img => img.image_url) // use image_url from API
+    : product?.image_url
+      ? [product.image_url] // fallback to main product image
+      : [];
+
 
   // 🟢 Price & discount logic
   const basePrice = Number(selectedVariant?.base_price || 0);
@@ -123,213 +144,243 @@ const ProductDetail = () => {
     basePrice > 0 && finalPrice < basePrice
       ? Math.round(((basePrice - finalPrice) / basePrice) * 100)
       : 0;
+  
+      // Check if selected variant is in cart
+    
 
   return (
     <div className="p-6">
-      <div className="flex flex-col md:flex-row gap-6 max-w-5xl mx-auto">
-        {/* Images */}
-        <div className="flex-1">
-          {variantImageUrls.length > 0 ? (
-            <>
-              <div className="w-full h-80 flex items-center justify-center bg-gray-100 rounded-xl shadow-md overflow-hidden">
+  <div className="flex flex-col md:flex-row gap-10 w-full px-4 lg:px-12">
+    {/* Images */}
+    <div className="w-full md:w-2/3">
+      {variantImageUrls.length > 0 ? (
+        <>
+          <div className="w-full h-[400px] sm:h-[550px] lg:h-[750px] flex items-center justify-center bg-white border-none rounded-xl shadow-sm overflow-hidden">
+            <img
+              src={variantImageUrls[currentImg] || product.image_url || "/placeholder.png"}
+              alt={selectedVariant?.variant_name || product?.name}
+              className="w-full h-full object-contain"
+            />
+          </div>
+
+          {/* Thumbnails */}
+          <div className="flex gap-3 mt-4 overflow-x-auto">
+            {variantImageUrls.map((imgUrl, idx) => (
+              <div
+                key={idx}
+                className={`min-w-[70px] sm:min-w-[90px] lg:min-w-[110px] h-[70px] sm:h-[90px] lg:h-[110px] flex items-center justify-center rounded-md border cursor-pointer ${idx === currentImg ? "border-blue-500" : "border-gray-300"} bg-gray-100`}
+                onClick={() => setCurrentImg(idx)}
+              >
                 <img
-                  src={variantImageUrls[currentImg] || "/placeholder.png"}
-                  alt={selectedVariant?.variant_name || product?.name}
+                  src={imgUrl || product.image_url || "/placeholder.png"}
+                  alt=""
                   className="max-w-full max-h-full object-contain"
                 />
               </div>
-              <div className="flex gap-2 mt-2 overflow-x-auto">
-                {variantImageUrls.map((imgUrl, idx) => (
-                  <div
-                    key={idx}
-                    className={`w-16 h-16 flex items-center justify-center rounded-md border ${
-                      idx === currentImg ? "border-blue-500" : "border-gray-300"
-                    } bg-gray-100 cursor-pointer`}
-                    onClick={() => setCurrentImg(idx)}
-                  >
-                    <img
-                      src={imgUrl || "/placeholder.png"}
-                      alt=""
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="w-full h-80 bg-gray-200 flex items-center justify-center text-gray-400 rounded-xl">
-              No Image Available
-            </div>
-          )}
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="w-full h-[400px] sm:h-[550px] lg:h-[750px] bg-gray-200 flex items-center justify-center text-gray-400 rounded-xl">
+          No Image Available
         </div>
+      )}
+    </div>
 
-        {/* Details */}
-        <div className="flex-1 space-y-4">
-          <h1 className="text-3xl font-bold capitalize">{product.name}</h1>
-          <p className="text-sm text-gray-500">
-            Category: <span className="font-medium">{product.category?.name}</span>
-          </p>
+    {/* Details */}
+    <div className="w-full md:w-1/3 space-y-4">
+      <h1 className="text-3xl font-bold capitalize">{product.name}</h1>
+      <p className="text-sm text-gray-500">
+        Category: <span className="font-medium">{product.category?.name}</span>
+      </p>
 
-          {/* 🟢 Show Price + Discount */}
-          <div className="flex items-center gap-3">
-            <p className="text-2xl font-bold text-green-700">₹{finalPrice}</p>
-            {discount > 0 && (
-              <>
-                <p className="text-lg text-gray-500 line-through">₹{basePrice}</p>
-                <span className="bg-red-100 text-red-600 text-sm font-semibold px-2 py-1 rounded-md">
-                  {discount}% OFF
-                </span>
-              </>
-            )}
-          </div>
+      {/* Price + Discount */}
+      <div className="flex items-center gap-3">
+        <p className="text-2xl font-bold text-green-700">₹{finalPrice}</p>
+        {discount > 0 && (
+          <>
+            <p className="text-lg text-gray-500 line-through">₹{basePrice}</p>
+            <span className="bg-red-100 text-red-600 text-sm font-semibold px-2 py-1 rounded-md">
+              {discount}% OFF
+            </span>
+          </>
+        )}
+      </div>
 
-          <div className="space-y-1">
-            {selectedVariant?.description?.trim() ? (
-              <>
-                <span className="font-semibold text-gray-900">About this variant:</span>
-                <p className="text-gray-700">{selectedVariant.description}</p>
-              </>
-            ) : (
-              <>
-                <span className="font-semibold text-gray-900">About this product:</span>
-                <p className="text-gray-700">{product.description}</p>
-              </>
-            )}
-          </div>
+      {/* Description */}
+      <div className="space-y-1">
+        {selectedVariant?.description?.trim() ? (
+          <>
+            <span className="font-semibold text-gray-900">About this variant:</span>
+            <p className="text-gray-700">{selectedVariant.description}</p>
+          </>
+        ) : (
+          <>
+            <span className="font-semibold text-gray-900">About this product:</span>
+            <p className="text-gray-700">{product.description}</p>
+          </>
+        )}
+      </div>
 
-          {/* Variant selector */}
-          {(product.variants?.length > 1 ||
-            (product.variants?.length === 1 && product.variants[0]?.variant_name?.toLowerCase() !== 'default')) && (
-            <div>
-              <label className="block font-semibold mb-2">Select Variant:</label>
-              <VariantDropdown
-                product={product}
-                selectedVariant={selectedVariant}
-                setSelectedVariant={setSelectedVariant}
-                setQuantity={setQuantity}
-                setCurrentImg={setCurrentImg}
-              />
+      {/* Variant selector */}
+      {(product.variants?.length > 1 ||
+        (product.variants?.length === 1 && product.variants[0]?.variant_name?.toLowerCase() !== 'default')) && (
+        <div>
+          <label className="block font-semibold mb-2">Select Variant:</label>
+          <VariantDropdown
+            product={product}
+            selectedVariant={selectedVariant}
+            setSelectedVariant={setSelectedVariant}
+            setQuantity={setQuantity}
+            setCurrentImg={setCurrentImg}
+          />
+        </div>
+      )}
 
-            </div>
-          )}
-
-        
+      {/* Stock / Quantity / Cart Buttons */}
+      {selectedVariant?.stock > 0 ? (
+        <>
           {/* Quantity controls */}
           <div className="flex items-center space-x-4 mt-4">
-            <button onClick={() => productQuantity('sub')} disabled={quantity <= 1} className="w-10 h-10 flex justify-center items-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-200 transition">-</button>
+            <button
+              onClick={() => productQuantity('sub')}
+              disabled={quantity <= 1}
+              className="w-10 h-10 flex justify-center items-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              -
+            </button>
             <span className="min-w-[30px] text-center text-lg font-medium">{quantity}</span>
-            <button onClick={() => productQuantity('add')} className="w-10 h-10 flex justify-center items-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-200 transition">+</button>
+            <button
+              onClick={() => productQuantity('add')}
+              disabled={quantity >= selectedVariant.stock}
+              className="w-10 h-10 flex justify-center items-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              +
+            </button>
           </div>
 
-                    {/* Return & Replacement Info */}
-          {selectedVariant && (selectedVariant.allow_return || selectedVariant.allow_replacement) && (
-            <div className="mt-6 bg-gray-50 border rounded-xl p-4 sm:p-5 text-sm text-gray-700 space-y-2">
-              <h3 className="text-base font-semibold text-gray-800 mb-2">Return & Replacement Policy</h3>
-              <ul className="list-disc list-inside space-y-1">
-                {selectedVariant.allow_return && (
-                  <li>
-                    <span className="font-medium text-gray-900">Return available:</span> within {selectedVariant.return_days} days of delivery
-                  </li>
-                )}
-                {selectedVariant.allow_replacement && (
-                  <li>
-                    <span className="font-medium text-gray-900">Replacement available:</span> within {selectedVariant.replacement_days} days of delivery
-                  </li>
-                )}
-              </ul>
-              <p className="text-xs text-gray-500 mt-2">
-                Please ensure the item is unused and in original packaging to be eligible.
-              </p>
-            </div>
-          )}
-
-          {/* Cart / Buy Now */}
+          {/* Add to Cart / Buy Now */}
           <div className="flex gap-4 mt-6">
-            <button onClick={() => addToCart(selectedVariant?.id)} disabled={isLoading || !selectedVariant || selectedVariant.stock === 0} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
-              {isLoading ? 'Adding...' : 'Add to Cart'}
-            </button>
-            <button onClick={handleBuyNow} disabled={!selectedVariant || selectedVariant.stock === 0} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+            {inCart ? (
+              <button
+                onClick={() => navigate("/cart")}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+              >
+                Go to Cart
+              </button>
+            ) : (
+              <button
+                onClick={() => addToCart(selectedVariant?.id)}
+                disabled={isLoading || !selectedVariant}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? "Adding..." : "Add to Cart"}
+              </button>
+            )}
+
+            <button
+              onClick={handleBuyNow}
+              disabled={!selectedVariant}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Buy Now
             </button>
           </div>
+        </>
+      ) : (
+        <p className="text-red-600 font-bold mt-2">Out of Stock</p>
+      )}
+
+      {/* Return & Replacement Info */}
+      {selectedVariant && (selectedVariant.allow_return || selectedVariant.allow_replacement) && (
+        <div className="mt-6 bg-gray-50 border rounded-xl p-4 sm:p-5 text-sm text-gray-700 space-y-2">
+          <h3 className="text-base font-semibold text-gray-800 mb-2">Return & Replacement Policy</h3>
+          <ul className="list-disc list-inside space-y-1">
+            {selectedVariant.allow_return && (
+              <li>
+                <span className="font-medium text-gray-900">Return available:</span> within {selectedVariant.return_days} days of delivery
+              </li>
+            )}
+            {selectedVariant.allow_replacement && (
+              <li>
+                <span className="font-medium text-gray-900">Replacement available:</span> within {selectedVariant.replacement_days} days of delivery
+              </li>
+            )}
+          </ul>
+          <p className="text-xs text-gray-500 mt-2">
+            Please ensure the item is unused and in original packaging to be eligible.
+          </p>
         </div>
-      </div>
-
-      {/* Related Products */}
-      {relatedProducts.length > 0 && (
-  <div className="mt-12">
-    <h2 className="text-2xl font-bold mb-6 text-gray-800">Related Products</h2>
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-      {relatedProducts.map((rp) => {
-        // take the lowest prices among variants
-        const minBasePrice = rp.variants?.length
-          ? Math.min(...rp.variants.map(v => parseFloat(v.base_price)))
-          : null;
-
-        const minOfferPrice = rp.variants?.length
-          ? Math.min(...rp.variants.map(v => parseFloat(v.final_price)))
-          : null;
-
-        const discount =
-          minBasePrice && minOfferPrice
-            ? Math.round(((minBasePrice - minOfferPrice) / minBasePrice) * 100)
-            : 0;
-
-        return (
-          <div
-            key={rp.id}
-            className="group relative bg-white border rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
-            onClick={() => navigate(`/products/${rp.slug}`)}
-          >
-            {/* Image */}
-            <div className="w-full h-48 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
-              {rp.image_url ? (
-                <img
-                  src={rp.image_url}
-                  alt={rp.name}
-                  className="max-w-full max-h-full object-contain transform group-hover:scale-105 transition-transform duration-300"
-                />
-              ) : (
-                <div className="text-gray-400 text-center w-full">No Image</div>
-              )}
-            </div>
-
-            {/* Details */}
-            <div className="p-4">
-              <h3 className="text-base font-semibold text-gray-800 group-hover:text-[#155dfc] line-clamp-1">
-                {rp.name}
-              </h3>
-
-              {minOfferPrice !== null && (
-                <div className="mt-1 flex items-center gap-2">
-                  <p className="text-lg font-bold text-green-700">₹{minOfferPrice}</p>
-                  {minBasePrice && minBasePrice > minOfferPrice && (
-                    <>
-                      <p className="text-sm text-gray-500 line-through">₹{minBasePrice}</p>
-                      <span className="text-sm font-medium text-red-600">
-                        {discount}% OFF
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Hover Badge */}
-            <div className="absolute top-3 right-3">
-              <span className="bg-indigo-100 text-[#155dfc] text-xs font-semibold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition duration-300">
-                View
-              </span>
-            </div>
-          </div>
-        );
-      })}
+      )}
     </div>
   </div>
-)}
 
+  {/* Related Products */}
+  {relatedProducts.length > 0 && (
+    <div className="mt-12">
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">Related Products</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        {relatedProducts.map((rp) => {
+          const minBasePrice = rp.variants?.length
+            ? Math.min(...rp.variants.map(v => parseFloat(v.base_price)))
+            : null;
+          const minOfferPrice = rp.variants?.length
+            ? Math.min(...rp.variants.map(v => parseFloat(v.final_price)))
+            : null;
+          const discount =
+            minBasePrice && minOfferPrice
+              ? Math.round(((minBasePrice - minOfferPrice) / minBasePrice) * 100)
+              : 0;
+          return (
+            <div
+              key={rp.id}
+              className="group relative bg-white border rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
+              onClick={() => navigate(`/products/${rp.slug}`)}
+            >
+              <div className="w-full h-48 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+                {rp.variants?.length > 0 && rp.variants[0].images?.length > 0 ? (
+                  <img
+                    src={rp.variants[0].images[0].image_url}
+                    alt={rp.name}
+                    className="max-w-full max-h-full object-contain transform group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : rp.image_url ? (
+                  <img
+                    src={rp.image_url}
+                    alt={rp.name}
+                    className="max-w-full max-h-full object-contain transform group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="text-gray-400 text-center w-full">No Image</div>
+                )}
+              </div>
 
+              <div className="p-4">
+                <h3 className="text-base font-semibold text-gray-800 group-hover:text-[#155dfc] line-clamp-1">
+                  {rp.name}
+                </h3>
+                {minOfferPrice !== null && (
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-lg font-bold text-green-700">₹{minOfferPrice}</p>
+                    {minBasePrice && minBasePrice > minOfferPrice && (
+                      <>
+                        <p className="text-sm text-gray-500 line-through">₹{minBasePrice}</p>
+                        <span className="text-sm font-medium text-red-600">
+                          {discount}% OFF
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
+  )}
+</div>
+
   );
 };
 

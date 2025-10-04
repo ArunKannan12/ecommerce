@@ -25,6 +25,7 @@ const OrderList = () => {
         const res = await axiosInstance.get("orders/");
         const data = res.data.results || [];
         setOrders(data);
+  
       } catch (error) {
         console.error("Failed to fetch orders:", error);
         toast.error(
@@ -43,6 +44,14 @@ const OrderList = () => {
   if (orders.length === 0)
     return <p className="p-6 text-center">You have no orders yet.</p>;
 
+  // Helper function to pick a variant image safely
+  const getVariantImageUrl = (variant) => {
+    if (variant.images?.length > 0) {
+      return variant.images[0].image_url || variant.images[0].image || variant.primary_image_url || "/placeholder.png";
+    }
+    return variant.primary_image_url || "/placeholder.png";
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-6">
       <h1 className="text-3xl sm:text-4xl font-extrabold mb-10 text-gray-900">
@@ -55,10 +64,7 @@ const OrderList = () => {
         animate="show"
         variants={{
           hidden: { opacity: 0 },
-          show: {
-            opacity: 1,
-            transition: { staggerChildren: 0.12 },
-          },
+          show: { opacity: 1, transition: { staggerChildren: 0.12 } },
         }}
       >
         {orders.map((order) => {
@@ -72,22 +78,16 @@ const OrderList = () => {
               }${totalItems > 1 ? ` +${totalItems - 1} more` : ""}`
             : "Order";
 
-          const images = items.slice(0, 3).map((item) => {
-            const variant = item.product_variant;
-            if (variant.images?.length) return variant.images[0].url;
-            if (variant.product_images?.length) return variant.product_images[0];
-            return "/placeholder.png";
-          });
+          const images = items.slice(0, 3).map((item) =>
+            getVariantImageUrl(item.product_variant)
+          );
 
           const totalAmount = parseFloat(order.total);
 
           return (
             <motion.li
-              key={order.id}
-              variants={{
-                hidden: { opacity: 0, y: 30 },
-                show: { opacity: 1, y: 0 },
-              }}
+              key={order.order_number}
+              variants={{ hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0 } }}
               className="bg-white/70 backdrop-blur-md shadow-xl rounded-2xl p-6 flex justify-between items-center hover:shadow-2xl transition border border-gray-100"
             >
               <div className="flex items-center space-x-6">
@@ -96,11 +96,7 @@ const OrderList = () => {
                   {images.map((img, idx) => (
                     <motion.img
                       key={idx}
-                      src={
-                        img.startsWith("http")
-                          ? img
-                          : `http://localhost:8000${img}`
-                      }
+                      src={img}
                       alt="Product"
                       className="w-16 h-16 object-cover rounded-xl border border-gray-200 shadow hover:scale-105 transition"
                       whileHover={{ scale: 1.08 }}
@@ -162,7 +158,7 @@ const OrderList = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => navigate(`/orders/${order.id}`)}
+                onClick={() => navigate(`/orders/${order.order_number}`)}
                 className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl shadow-lg hover:from-blue-700 hover:to-indigo-700 transition"
               >
                 View Details
