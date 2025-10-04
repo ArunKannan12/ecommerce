@@ -4,47 +4,50 @@ import axiosInstance from "../../../api/axiosinstance";
 import { toast } from "react-toastify";
 import BannerConfirmDelete from "../helpers/BannerConfirmDelete";
 
-const BannerFormModal = ({ banner, onClose, refreshBanners }) => {
-  const [title, setTitle] = useState(banner.title || "");
-  const [subtitle, setSubtitle] = useState(banner.subtitle || "");
-  const [linkUrl, setLinkUrl] = useState(banner.link_url || "");
-  const [order, setOrder] = useState(banner.order || 0);
-  const [isActive, setIsActive] = useState(banner.is_active);
+const BannerFormModal = ({ banner = {}, onClose, refreshBanners, isCreateMode = false }) => {
+  const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [order, setOrder] = useState(0);
+  const [isActive, setIsActive] = useState(true);
   const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Update modal state when banner prop changes
   useEffect(() => {
     setTitle(banner.title || "");
     setSubtitle(banner.subtitle || "");
     setLinkUrl(banner.link_url || "");
     setOrder(banner.order || 0);
-    setIsActive(banner.is_active || false);
+    setIsActive(banner.is_active ?? true);
   }, [banner]);
 
-  const handleUpdate = async () => {
+  const handleSubmit = async () => {
     setLoading(true);
+    const formData = new FormData();
+    formData.append("title", title);
+    formData.append("subtitle", subtitle);
+    formData.append("link_url", linkUrl);
+    formData.append("order", order);
+    formData.append("is_active", isActive);
+    if (imageFile) formData.append("image", imageFile);
+
     try {
-      const formData = new FormData();
-      formData.append("title", title);
-      formData.append("subtitle", subtitle);
-      formData.append("link_url", linkUrl);
-      formData.append("order", order);
-      formData.append("is_active", isActive);
-      if (imageFile) formData.append("image", imageFile);
-
-      await axiosInstance.patch(`admin/banners/${banner.id}/`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      toast.success("Banner updated successfully");
+      if (isCreateMode) {
+        await axiosInstance.post("admin/banners/create/", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        toast.success("Banner created successfully");
+      } else {
+        await axiosInstance.patch(`admin/banners/${banner.id}/`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        toast.success("Banner updated successfully");
+      }
       refreshBanners();
       onClose();
     } catch (err) {
-        console.log(err);
-        
-      toast.error(err.response?.data?.detail || "Failed to update banner");
+      toast.error(err.response?.data?.detail || "Failed to save banner");
     } finally {
       setLoading(false);
     }
@@ -72,57 +75,54 @@ const BannerFormModal = ({ banner, onClose, refreshBanners }) => {
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 sm:p-6"
     >
       <motion.div
-        initial={{ y: -20, opacity: 0 }}
+        initial={{ y: -30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        exit={{ y: -20, opacity: 0 }}
-        className="bg-white rounded-lg w-full max-w-md sm:max-w-lg lg:max-w-xl p-4 sm:p-6 md:p-8 relative overflow-y-auto max-h-[90vh]"
+        exit={{ y: -30, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        className="bg-white rounded-xl w-full max-w-md sm:max-w-lg lg:max-w-2xl p-4 sm:p-6 md:p-8 relative overflow-y-auto max-h-[90vh] shadow-xl"
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-lg"
+          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl"
         >
           ✕
         </button>
 
-        <h2 className="text-lg sm:text-xl md:text-2xl font-semibold mb-4">
-          Edit Banner
+        <h2 className="text-xl sm:text-2xl font-semibold mb-6 text-gray-800">
+          {isCreateMode ? "Add New Banner" : "Edit Banner"}
         </h2>
 
         <motion.div
           initial="hidden"
           animate="visible"
           exit="hidden"
-          variants={{
-            visible: { transition: { staggerChildren: 0.08 } },
-          }}
-          className="space-y-3"
+          variants={{ visible: { transition: { staggerChildren: 0.08 } } }}
+          className="space-y-4"
         >
-          {[
-            { label: "Title", value: title, setter: setTitle, type: "text" },
+          {[{ label: "Title", value: title, setter: setTitle, type: "text" },
             { label: "Subtitle", value: subtitle, setter: setSubtitle, type: "text" },
-            { label: "Order", value: order, setter: setOrder, type: "number" },
-          ].map((field, idx) => (
+            { label: "Order", value: order, setter: setOrder, type: "number" }].map((field, idx) => (
             <motion.div
               key={idx}
               className="flex flex-col"
               variants={{ hidden: { opacity: 0, y: -5 }, visible: { opacity: 1, y: 0 } }}
             >
-              <label className="block font-medium text-sm sm:text-base">{field.label}</label>
+              <label className="text-sm font-medium text-gray-700">{field.label}</label>
               <input
                 type={field.type}
                 value={field.value}
                 onChange={(e) =>
                   field.setter(field.type === "number" ? Number(e.target.value) : e.target.value)
                 }
-                className="w-full border rounded px-2 py-1 sm:px-3 sm:py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </motion.div>
           ))}
 
           {/* Active Checkbox */}
           <motion.div
-            className="flex items-center gap-2 text-sm sm:text-base"
+            className="flex items-center gap-2 text-sm"
             variants={{ hidden: { opacity: 0, y: -5 }, visible: { opacity: 1, y: 0 } }}
           >
             <input
@@ -130,7 +130,7 @@ const BannerFormModal = ({ banner, onClose, refreshBanners }) => {
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
             />
-            <span>Active</span>
+            <span className="text-gray-700">Active</span>
           </motion.div>
 
           {/* Image Upload */}
@@ -138,8 +138,8 @@ const BannerFormModal = ({ banner, onClose, refreshBanners }) => {
             className="flex flex-col gap-2"
             variants={{ hidden: { opacity: 0, y: -5 }, visible: { opacity: 1, y: 0 } }}
           >
-            <label className="block font-medium text-sm sm:text-base">Banner Image</label>
-            {banner.image_url && (
+            <label className="text-sm font-medium text-gray-700">Banner Image</label>
+            {(banner.image_url || imageFile) && (
               <img
                 src={imageFile ? URL.createObjectURL(imageFile) : banner.image_url}
                 alt={title}
@@ -156,37 +156,41 @@ const BannerFormModal = ({ banner, onClose, refreshBanners }) => {
 
           {/* Buttons */}
           <motion.div
-            className="flex flex-col sm:flex-row justify-between gap-2 mt-4"
+            className="flex flex-col sm:flex-row justify-between gap-3 mt-6"
             variants={{ hidden: { opacity: 0, y: -5 }, visible: { opacity: 1, y: 0 } }}
           >
+            {!isCreateMode && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                disabled={loading}
+              >
+                Delete
+              </button>
+            )}
             <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="bg-red-500 text-white px-4 py-2 rounded"
+              onClick={handleSubmit}
+              className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded w-full sm:w-auto"
               disabled={loading}
             >
-              Delete
-            </button>
-            <button
-              onClick={handleUpdate}
-              className="bg-indigo-500 text-white px-4 py-2 rounded w-full sm:w-auto"
-              disabled={loading}
-            >
-              Save
+              {loading ? "Saving..." : isCreateMode ? "Create" : "Save"}
             </button>
           </motion.div>
         </motion.div>
       </motion.div>
 
       {/* Delete confirmation modal */}
-      <BannerConfirmDelete
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => {
-          handleDelete();
-          setShowDeleteConfirm(false);
-        }}
-        message="Are you sure you want to delete this banner? This action cannot be undone."
-      />
+      {!isCreateMode && (
+        <BannerConfirmDelete
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={() => {
+            handleDelete();
+            setShowDeleteConfirm(false);
+          }}
+          message="Are you sure you want to delete this banner? This action cannot be undone."
+        />
+      )}
     </motion.div>
   );
 };

@@ -939,29 +939,30 @@ class AdminDeliveryManStatsAPIView(RetrieveAPIView):
         return DeliveryMan.objects.select_related('user').all()
 
 
-# ADMIN: list all banners with search & filtering
-class AdminBannerListAPIView(ListAPIView):
-    queryset = Banner.objects.all().order_by("order")
+# ADMIN: list banners with filters, search, and ordering
+class AdminBannerListAPIView(generics.ListAPIView):
     serializer_class = BannerSerializer
     permission_classes = [IsAdmin]
-
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["is_active"]   # ?is_active=true/false
-    search_fields = ["title", "subtitle"]  # ?search=summer
-    ordering_fields = ["order", "created_at"]  # ?ordering=order or ?ordering=-created_at
+    filterset_fields = ["is_active"]              # ?is_active=true/false
+    search_fields = ["title", "subtitle"]         # ?search=summer
+    ordering_fields = ["order", "created_at"]     # ?ordering=order or ?ordering=-created_at
+
     def get_queryset(self):
-        return Banner.objects.all()
+        return Banner.objects.all().order_by("order")
+
 
 # ADMIN: create banners
 class BannerCreateAPIView(generics.CreateAPIView):
     queryset = Banner.objects.all()
     serializer_class = BannerSerializer
     permission_classes = [IsAdmin]
+    parser_classes = (MultiPartParser, FormParser)
 
 
-# ADMIN: retrieve, update, delete
+# ADMIN: retrieve, update, delete banners
 class BannerUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Banner.objects.all()
     serializer_class = BannerSerializer
     permission_classes = [IsAdmin]
-    def get_queryset(self):
-        return Banner.objects.all()
+    parser_classes = (MultiPartParser, FormParser)

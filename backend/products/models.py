@@ -136,6 +136,8 @@ class ProductVariantImage(BaseImage):
 
     def __str__(self):
         return f"Image for {self.variant}"
+    
+from django.utils.html import format_html
 class Banner(models.Model):
     title = models.CharField(max_length=255, blank=True, null=True)
     subtitle = models.CharField(max_length=255, blank=True, null=True)
@@ -149,22 +151,35 @@ class Banner(models.Model):
 
     class Meta:
         ordering = ["order", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["order"], condition=models.Q(is_active=True), name="unique_active_order")
+        ]
 
     def __str__(self):
         return self.title or f"Banner {self.id}"
 
+    def clean(self):
+        if self.order < 1:
+            raise ValidationError({"order": "Order must be greater than or equal to 1"})
+        super().clean()
+
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        # Upload to Cloudinary if image is provided and not already uploaded
+        # Upload to Cloudinary if a new image is provided and not already uploaded
         if self.image and (not self.image_url or 'res.cloudinary.com' not in self.image_url):
             try:
                 upload_result = cloudinary.uploader.upload(
-                    self.image.file,   # use .file for Django ImageField
+                    self.image.file,
                     folder='ecommerce/banners'
                 )
-                self.image_url = upload_result['secure_url']
-                # Remove local image after uploading
+                self.image_url = upload_result.get('secure_url')
+                # Remove local file reference (optional: defer deletion if needed)
                 self.image.delete(save=False)
-                super().save(update_fields=['image_url'])
             except Exception as e:
                 print(f"Cloudinary upload failed: {e}")
+        super().save(*args, **kwargs)
+
+    def image_tag(self):
+        if self.image_url:
+            return format_html('<img src="{}" width="100" />', self.image_url)
+        return "-"
+    image_tag.short_description = 'Preview'

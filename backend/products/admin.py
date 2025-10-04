@@ -106,15 +106,15 @@ class ProductVariantImageAdmin(admin.ModelAdmin):
 
 @admin.register(Banner)
 class BannerAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "order", "is_active", "created_at")
+    list_display = ("id", "title", "subtitle", "order", "is_active", "image_url", "created_at")
     list_filter = ("is_active", "created_at")
-    search_fields = ("title", "subtitle")
+    search_fields = ("title", "subtitle", "link_url")
     ordering = ("order",)
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("created_at", "updated_at", "image_url")  # image_url is auto-generated
 
     fieldsets = (
         ("Basic Info", {
-            "fields": ("title", "subtitle", "image", "link_url", "order", "is_active")
+            "fields": ("title", "subtitle", "image", "image_url", "link_url", "order", "is_active")
         }),
         ("Timestamps", {
             "fields": ("created_at", "updated_at"),

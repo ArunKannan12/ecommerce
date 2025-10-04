@@ -7,25 +7,23 @@ import { useAuth } from '../../contexts/authContext';
 
 const GoogleAuth = () => {
   const navigate = useNavigate();
-  const location = useLocation()
-  const { login } = useAuth(); // ✅ use the login function from context
+  const location = useLocation();
+  const { login } = useAuth();
 
   const handleGoogleLogin = async (credentialResponse) => {
     try {
-      // Send the Google ID token to backend
       await axiosInstance.post(
         'auth/social/google/',
         { id_token: credentialResponse.credential },
-        { withCredentials: true } // important for HttpOnly cookies
+        { withCredentials: true }
       );
-      
-      // Use context login to fetch user profile
+
       const { success } = await login();
-      
+
       if (success) {
         toast.success('Logged in with Google!');
         const from = location.state?.from || '/';
-        navigate(from, { replace: true }); // redirect after successful login
+        navigate(from, { replace: true });
       } else {
         toast.error('Failed to fetch user after Google login');
       }
@@ -36,8 +34,8 @@ const GoogleAuth = () => {
   };
 
   return (
-    <div className="d-flex justify-content-center w-100 mb-3">
-      <div style={{ width: '100%', maxWidth: '350px' }}>
+    <div className="flex justify-center w-full mb-4">
+      <div className="w-full max-w-sm">
         <GoogleLogin
           onSuccess={handleGoogleLogin}
           onError={() => toast.error('Google sign-in failed')}

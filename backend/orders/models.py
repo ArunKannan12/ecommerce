@@ -13,7 +13,10 @@ import random
 User = get_user_model()
 phone_regex = RegexValidator(regex=r'^[6-9]\d{9}$', message="Enter a valid 10-digit phone number")
 pin_regex = RegexValidator(regex=r'^\d{6}$', message="Enter a valid 6-digit postal code")
-
+name_regex = RegexValidator(
+    regex=r'^[A-Za-z\s\-]+$',
+    message="This field can only contain letters, spaces, and hyphens."
+)
 class ShippingAddress(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     full_name = models.CharField(max_length=50)
@@ -22,15 +25,16 @@ class ShippingAddress(models.Model):
 
     # Location fields
     locality = models.CharField(max_length=100, blank=True, null=True)# User-selected from dropdown
-    city = models.CharField(max_length=50)
-    district = models.CharField(max_length=50, blank=True, null=True)
-    state = models.CharField(max_length=50,blank=True,null=True)
+    city = models.CharField(max_length=50,validators=[name_regex])
+    district = models.CharField(max_length=50, blank=True, null=True,validators=[name_regex])
+    state = models.CharField(max_length=50,blank=True,null=True,validators=[name_regex])
     region = models.CharField(max_length=50, blank=True, null=True)
     postal_code = models.CharField(max_length=6, validators=[pin_regex])
     country = models.CharField(max_length=50, default="India")
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
     def __str__(self):
         return f"{self.full_name} ({self.locality}, {self.city}, {self.state})"
+    
 
 
 class OrderStatus(models.TextChoices):

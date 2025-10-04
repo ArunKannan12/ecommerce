@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, User } from "lucide-react";
 import { useAuth } from "../../contexts/authContext";
 import { useCartCount } from "../../utils/useCartCount";
+import Beston from '../../../Beston.png'
 
 const Navbar = () => {
   const [query, setQuery] = useState("");
@@ -53,7 +54,11 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 xl:px-32 py-5 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="text-2xl font-bold text-gray-800 hover:text-blue-600 transition-colors">
-          Beston
+          <img
+            src={Beston}
+            alt="Beston Logo"
+            className="h-10 w-auto object-contain transition-transform hover:scale-105"
+          />
         </Link>
 
         {/* Search Bar */}

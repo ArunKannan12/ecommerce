@@ -212,7 +212,56 @@ class ProductSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 # -------------------- BANNER --------------------
+import cloudinary.uploader
 class BannerSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(write_only=True, required=False)
+
     class Meta:
         model = Banner
-        fields = ["id", "title", "subtitle", "image_url", "link_url", "order", "is_active"]
+        fields = [
+            "id", "title", "subtitle", "image", "image_url",
+            "link_url", "order", "is_active"
+        ]
+        read_only_fields = ["id", "image_url"]
+
+    def validate_order(self, value):
+        if value < 1:
+            raise serializers.ValidationError("Order must be greater than or equal to 1")
+        return value
+
+    def create(self, validated_data):
+        image_file = validated_data.pop("image", None)
+        banner = Banner(**validated_data)
+
+        if image_file:
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    image_file,
+                    folder="ecommerce/banners"
+                )
+                banner.image_url = upload_result.get("secure_url")
+            except Exception as e:
+                raise serializers.ValidationError(f"Cloudinary upload failed: {e}")
+
+        banner.save()
+        return banner
+
+    def update(self, instance, validated_data):
+        image_file = validated_data.pop("image", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if image_file:
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    image_file,
+                    folder="ecommerce/banners"
+                )
+                instance.image_url = upload_result.get("secure_url")
+            except Exception as e:
+                raise serializers.ValidationError(f"Cloudinary upload failed: {e}")
+
+        instance.save()
+        return instance
+

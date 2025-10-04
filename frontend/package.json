@@ -19,6 +19,7 @@
     "bootstrap": "^5.3.7",
     "dayjs": "^1.11.18",
     "framer-motion": "^12.23.13",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.542.0",
     "moment": "^2.30.1",
     "rc-tooltip": "^6.4.0",

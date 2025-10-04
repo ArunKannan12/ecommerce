@@ -11,9 +11,22 @@ from accounts.email import CustomPasswordResetEmail
 from investor.serializers import InvestorSerializer
 from delivery.serializers import DeliveryManSerializer
 from promoter.serializers import PromoterSerializer
+from django.core.validators import RegexValidator
 
 User=get_user_model()
+phone_regex = RegexValidator(
+    regex=r'^(\+91[\-\s]?|0)?[6-9]\d{9}$',
+    message="Phone number must be a valid Indian number."
+)
 
+pincode_regex = RegexValidator(
+    regex=r'^[1-9][0-9]{5}$',
+    message="Pincode must be a valid 6-digit Indian pincode."
+)
+name_regex = RegexValidator(
+    regex=r'^[A-Za-z\s\-]+$',
+    message="This field can only contain letters, spaces, and hyphens."
+)
 class BaseUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -32,6 +45,21 @@ class BaseUserSerializer(serializers.ModelSerializer):
         return instance
 
 class CustomerProfileSerializer(BaseUserSerializer):
+    phone_number = serializers.CharField(
+        required=False, allow_blank=True, validators=[phone_regex]
+    )
+    pincode = serializers.CharField(
+        required=False, allow_blank=True, validators=[pincode_regex]
+    )
+    district = serializers.CharField(
+    required=False, allow_blank=True, validators=[name_regex]
+    )
+    city = serializers.CharField(
+        required=False, allow_blank=True, validators=[name_regex]
+    )
+    state = serializers.CharField(
+        required=False, allow_blank=True, validators=[name_regex]
+    )
     class Meta(BaseUserSerializer.Meta):
         fields = BaseUserSerializer.Meta.fields + [
             'phone_number', 'address', 'pincode', 

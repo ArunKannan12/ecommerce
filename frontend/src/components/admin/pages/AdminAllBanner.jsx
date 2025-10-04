@@ -9,6 +9,7 @@ const AdminAllBanner = () => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedBanner, setSelectedBanner] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const fetchBanners = async () => {
     setLoading(true);
@@ -30,7 +31,7 @@ const AdminAllBanner = () => {
   }, [search]);
 
   return (
-    <div className="p-10 md:p-8">
+    <div className="p-10 md:p-8 relative">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">All Banners</h1>
 
       {/* Search */}
@@ -75,14 +76,13 @@ const AdminAllBanner = () => {
                     <td className="px-4 py-3">
                       {banner.image_url && (
                         <div className="w-full overflow-hidden rounded mb-2">
-                            <img
+                          <img
                             src={banner.image_url}
                             alt={banner.title}
                             className="w-full h-auto max-h-48 object-cover rounded"
-                            />
+                          />
                         </div>
-                        )}
-
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm">{banner.order}</td>
                     <td className="px-4 py-3 text-sm">{banner.is_active ? "Yes" : "No"}</td>
@@ -127,15 +127,14 @@ const AdminAllBanner = () => {
                   </span>
                 </div>
                 {banner.image_url && (
-                    <div className="w-full overflow-hidden rounded mb-2">
-                        <img
-                        src={banner.image_url}
-                        alt={banner.title}
-                        className="w-full h-auto max-h-48 object-cover rounded"
-                        />
-                    </div>
+                  <div className="w-full overflow-hidden rounded mb-2">
+                    <img
+                      src={banner.image_url}
+                      alt={banner.title}
+                      className="w-full h-auto max-h-48 object-cover rounded"
+                    />
+                  </div>
                 )}
-
                 <p className="text-gray-600 text-sm mb-1">{banner.subtitle}</p>
                 <p className="text-gray-500 text-sm">Order: {banner.order}</p>
               </motion.div>
@@ -149,7 +148,7 @@ const AdminAllBanner = () => {
         <p className="text-gray-500 mt-4">No banners found</p>
       )}
 
-      {/* Modal */}
+      {/* Edit Modal */}
       <AnimatePresence>
         {selectedBanner && (
           <BannerFormModal
@@ -159,6 +158,30 @@ const AdminAllBanner = () => {
           />
         )}
       </AnimatePresence>
+
+      {/* Create Modal */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <BannerFormModal
+            banner={{}}
+            onClose={() => setShowCreateModal(false)}
+            refreshBanners={fetchBanners}
+            isCreateMode={true}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Floating Add Button */}
+      <motion.button
+        onClick={() => setShowCreateModal(true)}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        whileHover={{ scale: 1.1 }}
+        className="fixed bottom-6 right-6 bg-green-500 hover:bg-green-600 text-white text-3xl rounded-full w-14 h-14 flex items-center justify-center shadow-lg z-50"
+        title="Add Banner"
+      >
+        +
+      </motion.button>
     </div>
   );
 };
