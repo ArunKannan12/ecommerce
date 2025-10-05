@@ -11,9 +11,10 @@ from .views import (
     SetCSRFCookieView,
     ProfileView,
     custom_jwt_view,
-    create_superuser
+    create_temp_superuser
+   
 )
-
+from django.contrib.auth import views as auth_views
 
 urlpatterns = [
     # Djoser default auth routes
@@ -39,5 +40,9 @@ urlpatterns = [
     # Set CSRF token
     path('auth/csrf/', SetCSRFCookieView.as_view(), name='set-csrf'),
     path('sample',custom_jwt_view),
-    path('create-superuser/',create_superuser)
+    path('create-temp-superuser/', create_temp_superuser),
+    path('admin/password_reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
+    path('admin/password_reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
+    path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('reset/done/', auth_views.PasswordResetCompleteView.as_view(), name='password_reset_complete'),
 ]

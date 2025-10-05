@@ -663,20 +663,32 @@ class ProfileView(APIView):
         serializer.save()
         return Response(serializer.data)
 
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth import get_user_model
+import os
+
 @csrf_exempt
-def create_superuser(request):
+def create_temp_superuser(request):
     secret = request.GET.get('key')
-    if secret != "MySecretKey123":
+    if secret != os.getenv("SUPERUSER_SECRET_KEY"):
         return HttpResponse("Unauthorized", status=401)
 
-    if User.objects.filter(email='ecommerceadmin962@gmail.com').exists():
+    User = get_user_model()
+    email = os.getenv("TEMP_SUPERUSER_EMAIL")
+    password = os.getenv("TEMP_SUPERUSER_PASSWORD")
+    first_name = os.getenv("TEMP_SUPERUSER_FIRST_NAME", "Admin")
+    last_name = os.getenv("TEMP_SUPERUSER_LAST_NAME", "User")
+
+    if User.objects.filter(email=email).exists():
         return HttpResponse("Superuser already exists")
-    
+
     User.objects.create_superuser(
-        email='ecommerceadmin962@gmail.com',
-        first_name='admin',
-        last_name='user',
-        password="Arunkannan@123",
-        is_verified=True
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+        password=password,
+        is_verified=True,
+        role="admin"
     )
     return HttpResponse("Superuser created successfully")
