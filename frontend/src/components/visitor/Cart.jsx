@@ -84,11 +84,11 @@ const Cart = () => {
 
   // 🟢 Helper: get image URL prioritizing variant images
   const getImageUrl = (item) => {
-    if (item.images?.length > 0) return item.images[0]?.image_url || item.images[0]?.image;
+    if (item.images?.length > 0) return item.images[0]?.url || item.images[0]?.image;
     if (item.primary_image_url) return item.primary_image_url;
     return "/placeholder.png";
   };
-
+ 
   // Quantity update
   const handleUpdateQuantity = (itemId, newQty) => {
     if (newQty < 1) return;
@@ -152,7 +152,8 @@ const Cart = () => {
     (acc, item) => acc + (parseFloat(item.final_price) || 0) * item.quantity,
     0
   );
-
+  console.log(cartItems,'c');
+  
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-3xl sm:text-4xl font-extrabold mb-8 text-gray-900 tracking-tight">
@@ -171,7 +172,9 @@ const Cart = () => {
               className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-6 items-center border border-gray-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition bg-white"
             >
               {/* Product Image */}
-              <div className="w-full sm:w-32 md:w-28 lg:w-32">
+              <div 
+              onClick={() => navigate(`/products/${item.product_slug || item.id}`)}
+              className="w-full sm:w-32 md:w-28 lg:w-32 cursor-pointer">
                 <img
                   src={getImageUrl(item)}
                   alt={item.product_name || "Product"}
@@ -181,7 +184,7 @@ const Cart = () => {
 
               {/* Product Info */}
               <div className="space-y-2">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 capitalize truncate">
+                <h2 onClick={() => navigate(`/products/${item.product_slug || item.id}`)} className="ext-lg sm:text-xl font-semibold text-gray-900 capitalize truncate cursor-pointer">
                   {item.product_name} - {item.variant_name || "Default"}
                 </h2>
 
@@ -218,7 +221,9 @@ const Cart = () => {
                   >
                     −
                   </button>
-                  <span className="font-medium text-gray-800">{item.quantity}</span>
+                  <span className="font-medium text-gray-800 transition-transform duration-150 ease-in-out scale-105">
+                    {item.quantity}
+                  </span>
                   <button
                     onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
                     disabled={item.quantity >= item.stock}
@@ -244,6 +249,7 @@ const Cart = () => {
               Total: ₹{cartTotal.toFixed(2)}
             </p>
             <button
+              disabled={cartItems.length === 0}
               onClick={() => {
                 if (isAuthenticated) navigate("/checkout");
                 else {

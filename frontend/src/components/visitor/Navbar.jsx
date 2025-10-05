@@ -1,9 +1,10 @@
+// Navbar.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, User } from "lucide-react";
 import { useAuth } from "../../contexts/authContext";
 import { useCartCount } from "../../utils/useCartCount";
-import Beston from '../../../Beston.png'
+import Beston from '../../../Beston.png';
 
 const Navbar = () => {
   const [query, setQuery] = useState("");
@@ -14,17 +15,15 @@ const Navbar = () => {
   const [accountOpen, setAccountOpen] = useState(false);
   const totalItems = useCartCount();
 
-  // Update search query from URL
+  // Sync search query with URL
   useEffect(() => {
     if (location.pathname.startsWith("/store")) {
       const params = new URLSearchParams(location.search);
       setQuery(params.get("search") || "");
-    } else {
-      setQuery("");
-    }
+    } else setQuery("");
   }, [location]);
 
-  // Debounce search and navigate
+  // Debounced search navigation
   useEffect(() => {
     if (!location.pathname.startsWith("/store")) return;
     const trimmed = query.trim();
@@ -50,22 +49,19 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-50 bg-white/90 backdrop-blur-md shadow-md border-b border-gray-200 transition-all">
-      <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 xl:px-32 py-5 flex items-center justify-between">
+    <nav className="bg-white border-gray-200 ">
+      <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
+        
         {/* Logo */}
-        <Link to="/" className="text-2xl font-bold text-gray-800 hover:text-blue-600 transition-colors">
-          <img
-            src={Beston}
-            alt="Beston Logo"
-            className="h-10 w-auto object-contain transition-transform hover:scale-105"
-          />
+        <Link to="/" className="flex items-center space-x-3 rtl:space-x-reverse">
+          <img src={Beston} className="h-10" alt="Beston Logo" />
         </Link>
 
-        {/* Search Bar */}
-        <div className="flex-grow max-w-lg mx-4">
+        {/* Search */}
+        <div className="flex md:order-2 flex-grow max-w-xl mx-4">
           <form
             onSubmit={handleSearchSubmit}
-            className="flex items-center border border-gray-300 rounded-full overflow-hidden shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-all"
+            className="flex items-center border border-gray-300 rounded-full overflow-hidden shadow-sm focus-within:ring-2 focus-within:ring-blue-500 w-full"
           >
             <input
               type="search"
@@ -83,8 +79,8 @@ const Navbar = () => {
           </form>
         </div>
 
-        {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center space-x-6 text-gray-800 font-medium">
+        {/* Desktop Nav Links */}
+        <div className="hidden md:flex md:items-center md:space-x-6 text-gray-800 font-medium md:order-1">
           <Link to="/" className="hover:text-blue-600 transition-colors">Home</Link>
           <Link to="/store" className="hover:text-blue-600 transition-colors">Products</Link>
           <Link to="/cart" className="relative hover:text-blue-600 transition-colors">
@@ -96,7 +92,6 @@ const Navbar = () => {
             )}
           </Link>
 
-          {/* Account Dropdown */}
           {isAuthenticated ? (
             <div className="relative">
               <button
@@ -113,29 +108,16 @@ const Navbar = () => {
 
               <div
                 className={`absolute right-0 mt-2 w-44 bg-white border rounded-md shadow-xl z-50 transform origin-top-right transition-all duration-300 ease-out
-                  ${accountOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}
-                `}
+                  ${accountOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}
               >
-                <Link
-                  to="/profile"
-                  className="block px-4 py-2 hover:bg-gray-100 transition-colors"
-                  onClick={() => setAccountOpen(false)}
-                >
-                  Profile
-                </Link>
-                <Link
-                  to="/orders"
-                  className="block px-4 py-2 hover:bg-gray-100 transition-colors"
-                  onClick={() => setAccountOpen(false)}
-                >
-                  Orders
-                </Link>
+                <Link to="/profile" className="block px-4 py-2 hover:bg-gray-100" onClick={() => setAccountOpen(false)}>Profile</Link>
+                <Link to="/orders" className="block px-4 py-2 hover:bg-gray-100" onClick={() => setAccountOpen(false)}>Orders</Link>
                 <button
                   onClick={() => {
                     logout();
                     setAccountOpen(false);
                   }}
-                  className="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 transition-colors"
+                  className="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100"
                 >
                   Logout
                 </button>
@@ -145,6 +127,7 @@ const Navbar = () => {
             <Link to="/login" className="hover:text-blue-600 transition-colors">Login</Link>
           )}
         </div>
+
       </div>
     </nav>
   );

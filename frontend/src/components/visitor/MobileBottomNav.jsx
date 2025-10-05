@@ -1,8 +1,9 @@
+// BottomNav.jsx
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Home, ShoppingBag, ShoppingCart, User } from "lucide-react";
 
-const BottomNav = ({ isAuthenticated, totalItems, logout }) => {
+const BottomNav = ({ isAuthenticated, totalItems }) => {
   const location = useLocation();
 
   const navItems = [
@@ -13,7 +14,6 @@ const BottomNav = ({ isAuthenticated, totalItems, logout }) => {
       name: isAuthenticated ? "Profile" : "Login",
       icon: <User size={20} />,
       path: isAuthenticated ? "/profile" : "/login",
-      action: isAuthenticated ? null : null,
     },
   ];
 
@@ -22,7 +22,7 @@ const BottomNav = ({ isAuthenticated, totalItems, logout }) => {
       <nav className="flex justify-around items-center py-2">
         {navItems.map((item, idx) => (
           <Link
-             key={idx}
+            key={idx}
             to={item.path}
             className={`relative flex flex-col items-center text-gray-700 ${
               location.pathname === item.path ? "text-blue-600" : ""
@@ -36,7 +36,6 @@ const BottomNav = ({ isAuthenticated, totalItems, logout }) => {
             )}
             <span className="text-xs">{item.name}</span>
           </Link>
-
         ))}
       </nav>
     </div>
