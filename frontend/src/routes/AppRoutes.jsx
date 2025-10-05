@@ -46,16 +46,21 @@ const withSuspense = (Component) => (
 );
 
 // 🚀 Redirect `/` depending on role
+// RedirectHome.js
 const RedirectHome = () => {
-  const { isAdmin,isDeliveryMan,isWarehouseStaff } = useAuth();
-  
-  if (isAdmin()) return <Navigate to="/admin" replace />;
-  if (isWarehouseStaff()) return <Navigate to="/warehouse" replace />;
-  if (isDeliveryMan()) return <Navigate to="/delivery" replace />;
+  const { isAdmin, isDeliveryMan, isWarehouseStaff, isAuthenticated, loading } = useAuth();
 
-  // Visitor
+  if (loading) return null; // Don't render anything yet, let ProtectedRoutes handle loader
+
+  if (isAuthenticated) {
+    if (isAdmin()) return <Navigate to="/admin" replace />;
+    if (isWarehouseStaff()) return <Navigate to="/warehouse" replace />;
+    if (isDeliveryMan()) return <Navigate to="/delivery" replace />;
+  }
+
   return <VisitorHomePage />;
 };
+
 
 // 🚀 Router setup
 export const router = createBrowserRouter([

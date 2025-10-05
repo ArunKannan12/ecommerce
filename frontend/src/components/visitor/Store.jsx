@@ -3,22 +3,20 @@ import axiosInstance from "../../api/axiosinstance";
 import { toast } from "react-toastify";
 import Category from "../../components/visitor/Category.jsx";
 import FeaturedShimmer from "../../shimmer/FeaturedShimmer.jsx";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import CustomSortDropdown from "../helpers/CustomSortDropDown.jsx";
 import { motion } from "framer-motion";
 
 const Store = () => {
   const { categorySlug } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
 
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
-  const searchQuery = searchParams.get("search") || "";
-  const featuredFilter = searchParams.get("featured") === "true";
-  const availableFilter = searchParams.get("is_available") === "true";
-  const ordering = searchParams.get("ordering") || "";
+  const featuredFilter = false; // default, controlled via button
+  const availableFilter = false; // default, controlled via button
+  const ordering = ""; // default ordering
 
   const navigate = useNavigate();
 
@@ -26,7 +24,6 @@ const Store = () => {
     setLoadingProducts(true);
     try {
       const params = {
-        search: searchQuery || undefined,
         category_slug: categorySlug || undefined,
         featured: featuredFilter ? true : undefined,
         is_available: availableFilter ? true : undefined,
@@ -44,7 +41,6 @@ const Store = () => {
 
   const updateFilters = (newFilters) => {
     const updated = {
-      search: searchQuery || undefined,
       featured: featuredFilter ? "true" : undefined,
       is_available: availableFilter ? "true" : undefined,
       ordering: ordering || undefined,
@@ -53,12 +49,15 @@ const Store = () => {
     Object.keys(updated).forEach((key) => {
       if (updated[key] === undefined || updated[key] === false) delete updated[key];
     });
-    setSearchParams(updated);
+    navigate({
+      pathname: categorySlug ? `/store/${categorySlug}` : "/store",
+      search: new URLSearchParams(updated).toString(),
+    });
   };
 
   useEffect(() => {
     fetchProducts();
-  }, [categorySlug, searchQuery, featuredFilter, availableFilter, ordering]);
+  }, [categorySlug, featuredFilter, availableFilter, ordering]);
 
   const handleCategorySelect = (slug) => {
     navigate(slug ? `/store/${slug}` : "/store");
@@ -74,16 +73,6 @@ const Store = () => {
         <p className="text-lg text-gray-600 mb-6">
           Handpicked products just for you
         </p>
-        {/* Search bar separated from gradient */}
-        <div className="max-w-lg mx-auto">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => updateFilters({ search: e.target.value })}
-            placeholder="Search products..."
-            className="w-full px-5 py-3 rounded-2xl text-gray-800 shadow-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition duration-300"
-          />
-        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-8">

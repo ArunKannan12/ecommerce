@@ -215,7 +215,7 @@ const LoginAndSignup = () => {
   }, [isAuthenticated, navigate, location.state]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 grid grid-cols-1 lg:grid-cols-2">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 lg:grid lg:grid-cols-2 flex flex-col ">
       {/* Left Section */}
       <div className="hidden lg:flex items-center justify-center bg-gradient-to-tr from-indigo-500 to-blue-600 text-white p-12">
         <div className="max-w-md text-center space-y-6">
@@ -230,14 +230,14 @@ const LoginAndSignup = () => {
       </div>
 
       {/* Right Section */}
-      <div className="flex items-center justify-center px-4 py-8">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="w-full max-w-md sm:max-w-lg md:max-w-xl bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl border border-gray-200 p-6 sm:p-8 overflow-y-auto"
-          style={{ maxHeight: "calc(100vh - 3rem)" }}
-        >
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-md sm:max-w-lg md:max-w-xl bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl border border-gray-200 p-6 sm:p-8 overflow-y-auto"
+            style={{ maxHeight: "calc(100vh - 3rem)" }}
+          >
           {/* Title */}
           <h2 className="text-3xl font-extrabold text-center text-gray-900 mb-2">
             {isLogin ? "Welcome Back 👋" : "Create Account 🚀"}

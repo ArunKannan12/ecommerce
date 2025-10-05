@@ -4,7 +4,7 @@ import { useMergeGuestCartMutation } from "./cartSlice";
 import { syncGuestcart } from "../utils/syncGuestCart";
 import { toast } from "react-toastify";
 import { getCookie } from "../utils/getCookie";
-
+import { useNavigate } from "react-router-dom";
 // Create context
 export const AuthContext = createContext({
   user: null,
@@ -18,6 +18,7 @@ export const AuthContext = createContext({
   isDeliveryMan: () => false,
   isWarehouseStaff: () => false,
 });
+const navigate = useNavigate();
 
 // CSRF setup
 const ensureCsrfCookie = async () => {
@@ -131,7 +132,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     setLoading(true);
     try {
-      await axiosInstance.post("auth/jwt/logout/");
+      await axiosInstance.post("auth/jwt/logout/",{},{withCredentials:true});
     } catch (error) {
       console.warn("Logout error", error);
     } finally {

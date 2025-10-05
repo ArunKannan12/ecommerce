@@ -20,7 +20,7 @@ const VisitorHomePage = () => {
     </div>
 
 
-      <div className="pt-[64px] flex-1 px-4">
+      <div className="pt-[64px] px-4">
         <Outlet />
       </div>
 
