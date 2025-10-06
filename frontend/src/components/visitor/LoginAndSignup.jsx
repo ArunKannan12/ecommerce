@@ -17,9 +17,11 @@ const LoginAndSignup = () => {
 
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const inputFocus = useRef(null);
-
+  const [showPassword, setShowPassword] = useState({
+    password: false,
+    re_password: false,
+  });
   // Login state
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [loginErrors, setLoginErrors] = useState({});
@@ -36,7 +38,8 @@ const LoginAndSignup = () => {
   const [signupErrors, setSignupErrors] = useState({});
 
   // Toggle password visibility
-  const togglePassword = () => setShowPassword((prev) => !prev);
+  const togglePassword = (field) =>
+  setShowPassword((prev) => ({ ...prev, [field]: !prev[field] }));
 
   /*** LOGIN FUNCTIONS ***/
   const handleLoginChange = (e) => {
@@ -88,40 +91,53 @@ const LoginAndSignup = () => {
     const { name, value } = e.target;
     setSignupData((prev) => ({ ...prev, [name]: value }));
 
-    // Live field validation
     setSignupErrors((prev) => {
       const newErrors = { ...prev };
+
       switch (name) {
         case "email":
           if (!value) newErrors.email = "Email is required";
           else if (!/\S+@\S+\.\S+/.test(value)) newErrors.email = "Invalid email format";
           else delete newErrors.email;
           break;
+
         case "first_name":
           if (!value) newErrors.first_name = "First name is required";
           else delete newErrors.first_name;
           break;
+
         case "last_name":
           if (!value) newErrors.last_name = "Last name is required";
           else delete newErrors.last_name;
           break;
+
         case "password":
           if (!value) newErrors.password = "Password is required";
-          else if (!/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/.test(value))
-            newErrors.password = "Must be 8+ chars, 1 letter & 1 number";
+          else if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(value))
+            newErrors.password = "Password must be 8+ chars, uppercase, lowercase, number & special char.";
           else delete newErrors.password;
+
+          // Live confirm password check
+          if (signupData.re_password && value !== signupData.re_password)
+            newErrors.re_password = "Passwords do not match";
+          else if (signupData.re_password) delete newErrors.re_password;
+
           break;
+
         case "re_password":
           if (!value) newErrors.re_password = "Confirm your password";
           else if (value !== signupData.password) newErrors.re_password = "Passwords do not match";
           else delete newErrors.re_password;
           break;
+
         default:
           break;
       }
+
       return newErrors;
     });
   };
+
 
   const validateSignup = () => {
     const errors = {};
@@ -142,7 +158,13 @@ const LoginAndSignup = () => {
 
     return errors;
   };
-
+  const payload = {
+    first_name: signupData.first_name.trim(),
+    last_name: signupData.last_name.trim(),
+    email: signupData.email.trim(),
+    password: signupData.password,
+    re_password: signupData.re_password,
+  };
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
     const errors = validateSignup();
@@ -153,7 +175,7 @@ const LoginAndSignup = () => {
 
     try {
       setLoading(true);
-      const res = await axiosInstance.post("auth/users/", signupData);
+      const res = await axiosInstance.post("auth/users/", payload);
       if (res.status === 201) {
         toast.success("Registration successful! Please check your email to verify.");
         setSignupErrors({});
@@ -161,6 +183,8 @@ const LoginAndSignup = () => {
         setTimeout(() => navigate("/verify-email", { state: { email: signupData.email, from } }), 200);
       }
     } catch (err) {
+      console.log(err);
+      
       if (err.response?.data) {
         const apiErrors = {};
         for (const key in err.response.data) {
@@ -343,7 +367,7 @@ const LoginAndSignup = () => {
                 <div className="relative">
                   <FaLock className="absolute left-3 top-3 text-gray-400" />
                   <input
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword.password ? "text" : "password"}
                     name="password"
                     value={signupData.password}
                     onChange={handleSignupChange}
@@ -353,10 +377,10 @@ const LoginAndSignup = () => {
                     }`}
                   />
                   <span
-                    onClick={togglePassword}
+                    onClick={() => togglePassword('password')}
                     className="absolute right-3 top-3 text-gray-500 cursor-pointer"
                   >
-                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                    {showPassword.password ? <FaEyeSlash /> : <FaEye />}
                   </span>
                   {signupErrors.password && (
                     <p className="text-sm text-red-500 mt-1">{signupErrors.password}</p>
@@ -367,7 +391,7 @@ const LoginAndSignup = () => {
                 <div className="relative">
                   <FaLock className="absolute left-3 top-3 text-gray-400" />
                   <input
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword.re_password ? "text" : "password"}
                     name="re_password"
                     value={signupData.re_password}
                     onChange={handleSignupChange}
@@ -377,10 +401,10 @@ const LoginAndSignup = () => {
                     }`}
                   />
                   <span
-                    onClick={togglePassword}
+                    onClick={() => togglePassword('re_password')}
                     className="absolute right-3 top-3 text-gray-500 cursor-pointer"
                   >
-                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                    {showPassword.re_password ? <FaEyeSlash /> : <FaEye />}
                   </span>
                   {signupErrors.re_password && (
                     <p className="text-sm text-red-500 mt-1">{signupErrors.re_password}</p>
