@@ -45,53 +45,64 @@ const OrderDetail = () => {
   };
 
   const handlePayNow = async () => {
-    setPaying(true);
-    try {
-      const res = await axiosInstance.post(`/orders/${order.order_number}/pay/`, {
-        payment_method: "Razorpay",
-      });
+  if (!window.Razorpay) {
+    toast.error("Payment gateway not loaded. Please try again.");
+    return;
+  }
 
-      if (res.data.payment_method === "Cash on Delivery") {
-        toast.success("Order confirmed with COD");
-        fetchOrder();
-        return;
-      }
+  setPaying(true);
+  try {
+    const res = await axiosInstance.post(`/orders/${order.order_number}/pay/`, {
+      payment_method: "Razorpay",
+    });
 
-      if (res.data.payment_method === "Razorpay" && !res.data.is_paid) {
-        const options = {
-          key: res.data.razorpay_key,
-          amount: res.data.amount,
-          currency: res.data.currency,
-          name: "Your Shop",
-          description: "Order Payment",
-          order_id: res.data.razorpay_order_id,
-          handler: async function (response) {
-            try {
-              await axiosInstance.post(`/orders/razorpay/verify/`, {
-                order_number: order.order_number,
-                ...response,
-              });
-              toast.success("Payment successful");
-              fetchOrder();
-            } catch {
-              toast.error("Payment verification failed");
-            }
-          },
-          prefill: {
-            name: order.shipping_address.full_name,
-            email: order.user?.email,
-            contact: order.shipping_address.phone_number,
-          },
-          theme: { color: "#3399cc" },
-        };
-        new window.Razorpay(options).open();
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.detail || "Payment failed");
-    } finally {
-      setPaying(false);
+    const { order: orderData } = res.data;
+
+    if (orderData.payment_method === "Cash on Delivery") {
+      toast.success("Order confirmed with COD");
+      fetchOrder();
+      return;
     }
-  };
+
+    if (orderData.payment_method === "Razorpay" && !orderData.is_paid) {
+      const options = {
+        key: res.data.razorpay_key, // from backend
+        amount: res.data.amount, // from backend
+        currency: res.data.currency, // from backend
+        name: "Beston Connect",
+        description: "Order Payment",
+        order_id: res.data.razorpay_order_id, // razorpay order id from backend
+        handler: async function (response) {
+          try {
+            await axiosInstance.post(`/orders/razorpay/verify/`, {
+              order_number: orderData.order_number,
+              ...response,
+            });
+            toast.success("Payment successful");
+            fetchOrder();
+          } catch (err) {
+            toast.error("Payment verification failed");
+          }
+        },
+        prefill: {
+          name: orderData.shipping_address.full_name,
+          email: orderData.user?.email,
+          contact: orderData.shipping_address.phone_number,
+        },
+        theme: { color: "#3399cc" },
+      };
+
+      new window.Razorpay(options).open();
+    }
+  } catch (err) {
+    console.log(err);
+    toast.error(err.response?.data?.detail || "Payment failed");
+  } finally {
+    setPaying(false);
+  }
+};
+
+
 
   const handleCancel = async () => {
     if (!cancelReason.trim()) {
@@ -151,7 +162,11 @@ const OrderDetail = () => {
         fetchOrder={fetchOrder} 
         canceling={paying}
         cancelLoading={cancelLoading}
-        onTriggerCancelModal={()=>setShowCancelModal(true)} />
+        onTriggerCancelModal={()=>setShowCancelModal(true)} 
+        onPayNow={handlePayNow}
+        paying={paying}
+        />
+       
 
         {/* Order Tracker */}
         <div className="bg-white/60 backdrop-blur-md rounded-xl shadow-md border border-gray-200 p-6">

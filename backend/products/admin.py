@@ -28,7 +28,7 @@ class ProductVariantInline(nested_admin.NestedTabularInline):
     show_change_link = True
     fields = (
         'variant_name', 'sku', 'base_price', 'offer_price',
-        'stock', 'is_active', 'promoter_commission_rate',
+        'stock','featured', 'is_active', 'promoter_commission_rate',
         'allow_return', 'return_days',           
         'allow_replacement', 'replacement_days'  
     )
@@ -73,7 +73,7 @@ class ProductAdmin(nested_admin.NestedModelAdmin):
 class ProductVariantAdmin(admin.ModelAdmin):
     list_display = (
         'id', 'product', 'variant_name', 'sku', 'base_price', 'offer_price',
-        'final_price', 'stock', 'is_active', 'promoter_commission_rate',
+        'final_price','featured', 'stock', 'is_active', 'promoter_commission_rate',
         'allow_return', 'return_days', 'allow_replacement', 'replacement_days'  # ← added
     )
     list_filter = ('is_active', 'allow_return', 'allow_replacement')  # optional

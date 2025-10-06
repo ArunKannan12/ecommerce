@@ -1,8 +1,8 @@
 from .views import (
     ProductListCreateAPIView,
     ProductRetrieveUpdateDestroyAPIView,
-    ProductVariantListCreateAPIView,
-    ProductVariantRetrieveUpdateDestroyAPIView,
+    ProductVariantListAPIView,
+    ProductVariantUpdateDestroyAPIView,
     CategoryListCreateAPIView,
     CategoryRetrieveUpdateDestroyAPIView,
     FeaturedProductsAPIView,
@@ -27,9 +27,8 @@ urlpatterns = [
     path('products/<slug:slug>/', ProductRetrieveUpdateDestroyAPIView.as_view(), name='product-detail'),
 
     # -------------------- PRODUCT VARIANTS --------------------
-    path('products/<int:product_id>/variants/', ProductVariantListCreateAPIView.as_view(), name='variant-list-create'),
-    path('variants/<int:id>/', ProductVariantRetrieveUpdateDestroyAPIView.as_view(), name='variant-detail'),
-
+    path("variants/", ProductVariantListAPIView.as_view(), name="variant-list"),  # ✅ Global variant listing
+    path("variants/<int:id>/", ProductVariantUpdateDestroyAPIView.as_view(), name="variant-update-delete"),  # ✅
     # -------------------- VARIANT IMAGES --------------------
     path('variants/<int:variant_id>/images/', ProductVariantImageListCreateAPIView.as_view(), name='variant-image-list-create'),
     path('variants/images/<int:id>/', ProductVariantImageRetrieveUpdateDestroyAPIView.as_view(), name='variant-image-detail'),

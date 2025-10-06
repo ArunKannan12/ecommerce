@@ -1,4 +1,3 @@
-// components/admin/modals/CategoryModal.jsx
 import React, { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import axiosInstance from "../../../api/axiosinstance";
@@ -11,7 +10,7 @@ const CategoryModal = ({ category = null, onClose, onSuccess }) => {
   const [slug, setSlug] = useState(category?.slug || "");
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(category?.image_url || null);
-  const [removeImage, setRemoveImage] = useState(false); // flag to remove existing image
+  const [removeImage, setRemoveImage] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -44,37 +43,22 @@ const CategoryModal = ({ category = null, onClose, onSuccess }) => {
 
     setLoading(true);
     try {
-      if (isEdit) {
-        if (image || removeImage) {
-          // --- use FormData when touching image ---
-          const formData = new FormData();
-          formData.append("name", name);
-          formData.append("slug", slug);
-          if (image) formData.append("image", image);
-          if (removeImage) formData.append("remove_image", "true");
+      const formData = new FormData();
+      formData.append("name", name);
+      formData.append("slug", slug);
 
-          await axiosInstance.patch(`/categories/${category.slug}/`, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-        } else {
-          // --- just send JSON if no image updates ---
-          await axiosInstance.patch(`/categories/${category.slug}/`, {
-            name,
-            slug,
-          });
-        }
+      if (image) formData.append("image", image);
+      if (removeImage) formData.append("remove_image", "true");
+
+      if (isEdit) {
+        await axiosInstance.patch(`/categories/${category.slug}/`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
         toast.success("Category updated successfully");
       } else {
-        // --- always FormData when creating, since image might be included ---
-        const formData = new FormData();
-        formData.append("name", name);
-        formData.append("slug", slug);
-        if (image) formData.append("image", image);
-
         await axiosInstance.post("/categories/", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-
         toast.success("Category added successfully");
       }
 
@@ -82,18 +66,21 @@ const CategoryModal = ({ category = null, onClose, onSuccess }) => {
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error(
-        err?.response?.data?.detail || "Failed to save category"
-      );
+      toast.error(err?.response?.data?.detail || "Failed to save category");
     } finally {
       setLoading(false);
     }
   };
 
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 relative">
+        {loading && (
+          <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-50">
+            <span className="text-gray-700 font-semibold">Saving...</span>
+          </div>
+        )}
+
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
@@ -130,12 +117,16 @@ const CategoryModal = ({ category = null, onClose, onSuccess }) => {
             <label className="block text-sm font-medium mb-1">Image</label>
             <input type="file" accept="image/*" onChange={handleImageChange} />
             {preview && (
-              <div className="mt-2 flex items-center gap-2">
-                <img src={preview} alt="Preview" className="w-32 h-32 object-cover rounded-md border" />
+              <div className="mt-2 flex flex-col items-center gap-2">
+                <img
+                  src={preview}
+                  alt="Preview"
+                  className="w-full max-w-xs h-48 object-cover rounded-md border"
+                />
                 <button
                   type="button"
                   onClick={handleRemoveImage}
-                  className="text-red-600 hover:text-red-800 flex items-center gap-1"
+                  className="text-red-600 hover:text-red-800 flex items-center gap-1 mt-2"
                 >
                   <FaTrash /> Remove
                 </button>

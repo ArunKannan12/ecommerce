@@ -52,7 +52,7 @@ const AdminProducts = () => {
       const res = await axiosInstance.get("/products/", {
         params: {
           search: search || "",
-          category: selectedCategory || "",
+          category_slug: selectedCategory || "",
           stock: stockFilter !== "all" ? stockFilter : "",
           availability: availability,
           ordering: sortBy,
@@ -71,11 +71,11 @@ const AdminProducts = () => {
   }, [search, selectedCategory, stockFilter, availability, sortBy]);
 
   // ---------------- Delete product ----------------
-  const handleDelete = async (slug) => {
+  const handleDelete = async (id) => {
     try {
-      await axiosInstance.delete(`/products/${slug}/`);
+      await axiosInstance.delete(`admin/products/${id}/`);
       toast.success("Product deleted");
-      setProducts((prev) => prev.filter((p) => p.slug !== slug));
+      setProducts((prev) => prev.filter((p) => p.id !== id));
     } catch {
       toast.error("Failed to delete product");
     }
@@ -91,19 +91,21 @@ const AdminProducts = () => {
     setTargetProduct(null);
   };
 
-  const confirmDelete = async () => {
-    if (targetProduct) {
-      await handleDelete(targetProduct.slug);
-    }
-    setShowConfirm(false);
-    setTargetProduct(null);
-  };
+  
+const confirmDelete = async () => {
+  if (targetProduct) {
+    await handleDelete(targetProduct.id);
+  }
+  setShowConfirm(false);
+  setTargetProduct(null);
+};
+
 
   // ---------------- Featured & Availability Toggle ----------------
   const toggleFeatured = async (product) => {
     try {
-      await axiosInstance.patch(`/products/${product.slug}/`, {
-        featured: !product.featured
+      await axiosInstance.patch(`/products/${product.id}/`, {
+        featured: !product.featured,
       });
       toast.success(`${product.name} is now ${!product.featured ? "featured" : "not featured"}`);
       fetchProducts();
@@ -114,8 +116,8 @@ const AdminProducts = () => {
 
   const toggleAvailability = async (product) => {
     try {
-      await axiosInstance.patch(`/products/${product.slug}/`, {
-        is_available: !product.is_available
+      await axiosInstance.patch(`/products/${product.id}/`, {
+        is_available: !product.is_available,
       });
       toast.success(`${product.name} is now ${!product.is_available ? "available" : "unavailable"}`);
       fetchProducts();
@@ -123,6 +125,7 @@ const AdminProducts = () => {
       toast.error("Failed to update availability");
     }
   };
+
 
   // ---------------- Bulk selection & actions ----------------
   const toggleSelectProduct = (id) => {
@@ -266,14 +269,14 @@ const AdminProducts = () => {
             const { totalStock, isLowStock } = computeStockStatus(p.variants);
             const priceDisplay = computePriceRange(p.variants);
             const isNew = p.variants?.some((v) => v.is_new);
-            const fallbackImage = p.image_url ||
-              p.variants?.[0]?.primary_image_url ||
+            const fallbackImage =
+              p.image_url ||
               p.variants?.[0]?.images?.[0]?.image_url ||
               "https://yourdomain.com/static/no-image.png";
 
             return (
               <motion.div
-                key={p.slug}
+                key={p.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
@@ -334,12 +337,12 @@ const AdminProducts = () => {
                         <button
                           className="lg:hidden text-sm text-blue-600 mb-1"
                           onClick={() =>
-                            setVariantsOpen((prev) => ({ ...prev, [p.slug]: !prev[p.slug] }))
+                            setVariantsOpen((prev) => ({ ...prev, [p.id]: !prev[p.id] }))
                           }
                         >
-                          {variantsOpen[p.slug] ? "Hide Variants ▲" : "View Variants ▼"}
+                          {variantsOpen[p.id] ? "Hide Variants ▲" : "View Variants ▼"}
                         </button>
-                        <div className={`${variantsOpen[p.slug] ? "block" : "hidden"} lg:block space-y-1 text-xs`}>
+                        <div className={`${variantsOpen[p.id] ? "block" : "hidden"} lg:block space-y-1 text-xs`}>
                           {p.variants.map((v) => (
                             <div key={v.id} className="flex justify-between">
                               <span className="truncate">{v.variant_name}</span>

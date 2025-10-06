@@ -63,48 +63,38 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
             return [IsAdmin()]
         return [permissions.AllowAny()]
 
+    def get_serializer_context(self):
+        return {
+            "request": self.request,
+            "search_query": self.request.query_params.get("search", "").strip().lower()
+        }
+
     def get_queryset(self):
         params = self.request.query_params
-        print(params,'params')
-        # ---------------- Base queryset ----------------
+        search_query = params.get("search", "").strip().lower()
+
         qs = Product.objects.select_related('category')
 
-        # ---------------- Category filter ----------------
         category_slug = params.get('category_slug')
         if category_slug:
             qs = qs.filter(category__slug=category_slug)
 
-        # ---------------- Annotate after filtering ----------------
-        qs = qs.prefetch_related(
-            'variants', 'variants__images'
-        ).annotate(
+        qs = qs.prefetch_related('variants', 'variants__images').annotate(
             total_stock=Sum('variants__stock'),
             min_variant_stock=Min('variants__stock'),
-            min_variant_price=Min(
-                'variants__offer_price',
-                filter=Q(variants__offer_price__isnull=False)
-            ),
-            max_variant_price=Max(
-                'variants__offer_price',
-                filter=Q(variants__offer_price__isnull=False)
-            ),
+            min_variant_price=Min('variants__offer_price', filter=Q(variants__offer_price__isnull=False)),
+            max_variant_price=Max('variants__offer_price', filter=Q(variants__offer_price__isnull=False)),
         )
 
-        # ---------------- Availability filter ----------------
         availability = params.get('availability', 'all')
         user_is_admin = self.request.user.is_authenticated and self.request.user.role == 'admin'
         if availability == "available":
             qs = qs.filter(is_available=True)
         elif availability == "unavailable":
-            if user_is_admin:
-                qs = qs.filter(is_available=False)
-            else:
-                qs = qs.none()
-        elif availability == "all":
-            if not user_is_admin:
-                qs = qs.filter(is_available=True)
+            qs = qs.filter(is_available=False) if user_is_admin else qs.none()
+        elif availability == "all" and not user_is_admin:
+            qs = qs.filter(is_available=True)
 
-        # ---------------- Stock filters ----------------
         stock_filter = params.get('stock')
         if stock_filter == 'low-stock':
             qs = qs.filter(min_variant_stock__gt=0, min_variant_stock__lte=5)
@@ -113,7 +103,6 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
         elif stock_filter == 'out-of-stock':
             qs = qs.filter(total_stock=0)
 
-        # ---------------- Price range filters (use annotations) ----------------
         min_price = params.get('min_price')
         max_price = params.get('max_price')
         if min_price:
@@ -121,13 +110,11 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
         if max_price:
             qs = qs.filter(max_variant_price__lte=max_price)
 
-        # ---------------- New arrivals filter ----------------
         is_new = params.get('is_new')
         if is_new and is_new.lower() == 'true':
             new_threshold = timezone.now() - timedelta(days=7)
             qs = qs.filter(created_at__gte=new_threshold)
 
-        # ---------------- Ordering ----------------
         ordering = params.get('ordering')
         if ordering == "newest":
             qs = qs.order_by("-created_at")
@@ -143,7 +130,6 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
             qs = qs.order_by("-max_variant_price")
 
         return qs.distinct()
-
 
 class ProductRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductSerializer
@@ -162,32 +148,41 @@ class ProductRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView)
 
 
 # -------------------- PRODUCT VARIANTS --------------------
-class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = ProductVariantSerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['variant_name', 'sku']
-    ordering_fields = ['base_price','offer_price', 'stock']
 
-    def get_permissions(self):
-        if self.request.method == 'POST':
-            return [IsAdmin()]
-        return [permissions.AllowAny()]
+class ProductVariantListAPIView(generics.ListAPIView):
+    serializer_class = ProductVariantSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['variant_name', 'sku', 'description', 'product__name']
+    ordering_fields = ['base_price', 'offer_price', 'stock', 'product__created_at', 'product__name']
 
     def get_queryset(self):
-        product_id = self.kwargs.get('product_id')
-        return ProductVariant.objects.filter(product_id=product_id).select_related('product')
+        qs = ProductVariant.objects.select_related('product').prefetch_related('images')
+        params = self.request.query_params
 
-    def perform_create(self, serializer):
-        product_id = self.kwargs.get('product_id')
-        serializer.save(product_id=product_id)
+        # ✅ Variant-level featured filter
+        featured = params.get("featured")
+        if featured and featured.lower() in ["true", "1"]:
+            qs = qs.filter(featured=True)
 
-    def perform_update(self, serializer):
-        # Ensures validation for returnable/replacement fields is applied
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        # ✅ Product-level availability filter
+        available = params.get("is_available")
+        if available and available.lower() in ["true", "1"]:
+            qs = qs.filter(product__is_available=True)
+
+        # ✅ Category filter
+        category_slug = params.get("category_slug")
+        if category_slug:
+            qs = qs.filter(product__category__slug=category_slug)
+
+        # ✅ Default ordering
+        if not params.get("ordering"):
+            qs = qs.order_by("-product__created_at")
+
+        return qs
 
 
-class ProductVariantRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+class ProductVariantUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductVariantSerializer
     lookup_field = 'id'
     queryset = ProductVariant.objects.select_related('product')
@@ -195,11 +190,12 @@ class ProductVariantRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyA
     def get_permissions(self):
         if self.request.method in ['PUT', 'PATCH', 'DELETE']:
             return [IsAdmin()]
-        return [permissions.AllowAny()]
+        return [permissions.AllowAny]
 
-    def perform_update(self, serializer):
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+    def get(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
         
 class BulkProductVariantCreateAPIView(APIView):
     permission_classes = [permissions.IsAdminUser]  # ✅ Only admin can access
@@ -244,10 +240,12 @@ class BulkProductVariantCreateAPIView(APIView):
 # -------------------- FEATURED & RELATED --------------------
 class FeaturedProductsAPIView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
-    serializer_class = ProductSerializer
-
+    serializer_class = ProductVariantSerializer
     def get_queryset(self):
-        return Product.objects.filter(featured=True, is_available=True).order_by('-created_at')
+        return ProductVariant.objects.select_related('product').prefetch_related('images')\
+            .filter(featured=True, product__is_available=True)\
+            .order_by('-product__created_at')
+
 
 
 class RelatedProductsAPIView(generics.ListAPIView):

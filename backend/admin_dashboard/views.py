@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models.functions import Concat
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import WarehouseTimelineFilter
-from rest_framework import generics, permissions, filters
+from rest_framework import generics, filters
 from accounts.permissions import IsAdmin,IsWarehouseStaffOrAdmin
 from .serializers import (
                         AdminDashboardStatsSerializer, 
@@ -27,11 +27,11 @@ from delivery.models import DeliveryMan,DeliveryManRequest
 from rest_framework.exceptions import NotFound
 from django.db import transaction
 from django.db.models import Max,Q,F,Value,CharField
-from products.models import Product
+from products.models import Product,ProductVariant
 import json
 from rest_framework.parsers import MultiPartParser,FormParser,JSONParser
 from rest_framework.exceptions import ValidationError
-from products.models import ProductVariant,Banner
+from products.models import Banner,ProductVariantImage
 from products.serializers import BannerSerializer
 from rest_framework.generics import ListAPIView,RetrieveAPIView,RetrieveUpdateAPIView
 from django.contrib.auth import get_user_model
@@ -113,6 +113,8 @@ class ProductAdminCreateAPIView(CreateAPIView):
         print("🎉 Product created:", product.id)
         return Response(self.get_serializer(product).data, status=201)
     
+import logging
+logger = logging.getLogger('admin_dashboard')
 class ProductAdminDetailAPIView(RetrieveUpdateDestroyAPIView):
     serializer_class = ProductAdminSerializer
     permission_classes = [IsAdmin]
@@ -126,138 +128,210 @@ class ProductAdminDetailAPIView(RetrieveUpdateDestroyAPIView):
         return {"request": self.request}
 
     def _parse_variants(self, data, files):
-        """
-        Parse 'variants' JSON string, bind uploaded images, and prepare
-        variant payload for the serializer.
-        Handles new uploads and tracks existing images to keep/remove.
-        """
-        variants = data.get("variants")
-        if variants and isinstance(variants, str):
-            try:
-                variants = json.loads(variants)
-                print("✅ Parsed variants:", variants)
-            except json.JSONDecodeError:
-                raise ValidationError({"variants": ["Invalid JSON format"]})
-        elif not variants:
-            variants = []
+        print("🔍 Starting _parse_variants")
 
+        # Step 1: Extract and parse variants
+        variants = None
+        if isinstance(data, dict):
+            variants = data.get("variants", [])
+            print(f"📦 Raw variants from dict: {variants}")
+            if isinstance(variants, str):
+                try:
+                    variants = json.loads(variants)
+                    print("✅ Parsed variants JSON string successfully")
+                except json.JSONDecodeError:
+                    print("❌ Failed to parse variants JSON string")
+                    raise ValidationError({"variants": ["Invalid JSON format"]})
+        elif isinstance(data, list):
+            variants = data
+            data = {"variants": variants}
+            print("📦 Raw variants from list")
+        else:
+            print("❌ Invalid variants format")
+            raise ValidationError({"variants": ["Invalid format"]})
+
+        # Step 2: Ensure variants is a list
+        if not isinstance(variants, list):
+            print("❌ Parsed variants is not a list")
+            raise ValidationError({"variants": ["Expected a list of variants"]})
+
+        # Step 3: Parse each variant if it's a string
+        for i in range(len(variants)):
+            if isinstance(variants[i], str):
+                try:
+                    variants[i] = json.loads(variants[i])
+                    print(f"✅ Parsed variant #{i+1} from string to dict")
+                except json.JSONDecodeError:
+                    raise ValidationError({"variants": [f"Variant #{i+1} is not valid JSON."]})
+
+        # Step 4: Process each variant
         for i, variant in enumerate(variants):
-            # Gather newly uploaded images
-            new_images = []
-            for key, file in files.items():
-                if key.startswith(f"variant_{i}_image_"):
-                    print(f"🖼️ Binding uploaded image {key} to variant {i}")
-                    new_images.append({"image": file})
+            print(f"\n🔄 Processing variant #{i+1}: {variant.get('variant_name', '')}")
+            print(f"🧪 Variant type: {type(variant)}")
 
-            # Existing images the user wants to keep
+            # New uploads
+            new_images = [{"image": file} for key, file in files.items() if key.startswith(f"variant_{i}_image_")]
+            print(f"📥 New uploaded image keys: {[key for key in files if key.startswith(f'variant_{i}_image_')]}")
+
+            # Images to remove
+            remove_images = [img_id for img_id in variant.get("removed_images", []) if isinstance(img_id, int)]
+            print(f"🗑️ Images marked for removal: {remove_images}")
+
+            # Existing images
             existing_images = []
-            for img in variant.get("existing_images", []):
+            for img in variant.get("existingImages", []):
                 if isinstance(img, dict) and img.get("id"):
                     existing_images.append({"id": img["id"]})
+                elif isinstance(img, str):
+                    img_obj = ProductVariantImage.objects.filter(image_url=img).first()
+                    if img_obj:
+                        existing_images.append({"id": img_obj.id})
+                        print(f"🔗 Resolved image URL to ID: {img_obj.id}")
 
-            # Images user wants to remove
-            remove_images = []
-            for img in variant.get("remove_images", []):
-                if isinstance(img, int):
-                    remove_images.append(img)
+            print(f"📸 Existing images before filtering: {[img['id'] for img in existing_images]}")
+            print(f"⭐ Variant #{i+1} featured status: {variant.get('featured')}")
+            # Filter out removed images
+            existing_images = [img for img in existing_images if img["id"] not in remove_images]
+            print(f"✅ Existing images after filtering: {[img['id'] for img in existing_images]}")
 
-            # Store in variant for serializer
+            # Validate image count
+            total_images = len(existing_images) + len(new_images)
+            print(f"📊 Total images for variant #{i+1}: {total_images}")
+            if total_images == 0:
+                print(f"❌ Variant #{i+1} has no images")
+                raise ValidationError({
+                    "variants": [
+                        f"Variant #{i+1} ('{variant.get('variant_name', '')}') must have at least one image."
+                    ]
+                })
+
+            # Final assignment
             variant["images"] = existing_images + new_images
             variant["remove_images"] = remove_images
-            variant.pop("existing_images", None)
+            variant.pop("existingImages", None)
 
-        # PUT must have at least one variant
-        if self.request.method == "PUT" and not variants:
+        # Step 5: Ensure at least one variant exists for PUT/PATCH
+        if self.request.method in ["PUT", "PATCH"] and not variants:
+            print("❌ No variants provided for update")
             raise ValidationError({"variants": ["At least one variant is required."]})
 
         data["variants"] = variants
+        print("✅ Finished parsing variants")
         return data
 
-
     def _handle_main_image_removal(self, request, instance):
-        """
-        Optional improvement: handle main product image removal via 'remove_image' flag.
-        """
-        if request.data.get("remove_image"):
-            if instance.image:
-                instance.image.delete(save=False)
+        if request.data.get("remove_image") and instance.image:
+            instance.image.delete(save=False)
             instance.image = None
             instance.image_url = None
 
     @transaction.atomic
     def put(self, request, *args, **kwargs):
         data = request.data.copy()
-        print("🔹 PUT payload before parsing:", data)
         data = self._parse_variants(data, request.FILES)
-
         instance = self.get_object()
         self._handle_main_image_removal(request, instance)
-
         serializer = self.get_serializer(instance, data=data)
-        if not serializer.is_valid():
-            print("❌ Serializer errors:", serializer.errors)
-            return Response(serializer.errors, status=400)
-
+        serializer.is_valid(raise_exception=True)
         product = serializer.save()
-        print("🎉 Product updated (PUT):", product.id)
         return Response(self.get_serializer(product).data)
 
     @transaction.atomic
     def patch(self, request, *args, **kwargs):
         data = request.data.copy()
-        print("🔹 PATCH payload before parsing:", data)
         data = self._parse_variants(data, request.FILES)
-
         instance = self.get_object()
         self._handle_main_image_removal(request, instance)
 
-        # Update product fields
         serializer = self.get_serializer(instance, data=data, partial=True)
-        if not serializer.is_valid():
-            print("❌ Serializer errors:", serializer.errors)
-            return Response(serializer.errors, status=400)
-
+        serializer.is_valid(raise_exception=True)
         product = serializer.save()
-        print("🎉 Product updated (PATCH):", product.id)
 
-        # 🔁 Handle variants manually
-        for i, variant_data in enumerate(data.get("variants", [])):
+        # Handle variants
+        variants_data = data.get("variants", [])
+        existing_variants = {v.id: v for v in product.variants.all()}
+
+        for variant_data in variants_data:
             variant_id = variant_data.get("id")
-            if variant_id:
-                try:
-                    variant_instance = ProductVariant.objects.get(id=variant_id)
-                    print(f"🔄 Updating variant {variant_id}")
-                    variant_serializer = ProductVariantAdminSerializer(
-                        instance=variant_instance,
-                        data=variant_data,
-                        context={"product": product},
-                        partial=True
-                    )
-                except ProductVariant.DoesNotExist:
-                    print(f"⚠️ Variant {variant_id} not found")
-                    continue
-            else:
-                print(f"➕ Creating new variant: {variant_data.get('variant_name')}")
-                variant_serializer = ProductVariantAdminSerializer(
-                    data=variant_data,
-                    context={"product": product}
-                )
+            if variant_id and variant_id in existing_variants:
+                variant_instance = existing_variants.pop(variant_id)
 
-            if variant_serializer.is_valid():
+                # Validate remaining images before saving
+                remaining_images_count = len(variant_data.get("images", [])) + variant_instance.images.exclude(
+                    id__in=variant_data.get("remove_images", [])
+                ).count()
+                if remaining_images_count == 0:
+                    raise ValidationError(
+                        f"Variant '{variant_instance.variant_name}' must have at least one image."
+                    )
+
+                # ✅ DEBUG PRINT: Confirm remove_images is present
+                if "remove_images" in variant_data:
+                    print(f"🧹 Passing remove_images to serializer for variant {variant_id}: {variant_data['remove_images']}")
+
+                variant_serializer = ProductVariantAdminSerializer(
+                    variant_instance, data=variant_data, context={"product": product}, partial=True
+                )
+                variant_serializer.is_valid(raise_exception=True)
                 variant_serializer.save()
             else:
-                print(f"❌ Variant {i} error:", variant_serializer.errors)
+                # Create new variant
+                variant_serializer = ProductVariantAdminSerializer(
+                    data=variant_data, context={"product": product}
+                )
+                variant_serializer.is_valid(raise_exception=True)
+                variant_serializer.save()
+
+        # Delete removed variants
+        for remaining_variant in existing_variants.values():
+            remaining_variant.delete()
+
+        # Ensure at least one variant remains
+        if product.variants.count() == 0:
+            raise ValidationError("A product must have at least one variant.")
 
         return Response(self.get_serializer(product).data)
 
     @transaction.atomic
     def delete(self, request, *args, **kwargs):
         product = self.get_object()
-        print(f"🗑️ Deleting product {product.id}")
         product.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class VariantBulkActionAPIView(APIView):
+    permission_classes = [IsAdmin]
+
+    def post(self, request):
+        ids = request.data.get("ids", [])
+        action = request.data.get("action")
+        value = request.data.get("value")  # boolean for set_featured/set_availability
+
+        if not ids or not isinstance(ids, list):
+            return Response({"error": "IDs must be a list of variant IDs"}, status=status.HTTP_400_BAD_REQUEST)
+
+        variants = ProductVariant.objects.filter(id__in=ids)
+        if not variants.exists():
+            return Response({"error": "No variants found for given IDs"}, status=status.HTTP_404_NOT_FOUND)
+
+        if action == "delete":
+            count = variants.count()
+            variants.delete()
+            return Response({"deleted": count}, status=status.HTTP_200_OK)
+
+        elif action == "set_featured":
+            if value is None:
+                return Response({"error": "Value is required for set_featured"}, status=status.HTTP_400_BAD_REQUEST)
+            variants.update(featured=value)
+            return Response({"updated": variants.count(), "action": "set_featured"}, status=status.HTTP_200_OK)
+
+        elif action == "set_availability":
+            if value is None:
+                return Response({"error": "Value is required for set_availability"}, status=status.HTTP_400_BAD_REQUEST)
+            variants.update(is_active=value)
+            return Response({"updated": variants.count(), "action": "set_availability"}, status=status.HTTP_200_OK)
+
+        return Response({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
 class ProductBulkActionAPIView(APIView):
     permission_classes = [IsAdmin]
 

@@ -159,93 +159,100 @@ class AdminDashboardStatsSerializer(serializers.Serializer):
 class ProductVariantAdminSerializer(serializers.ModelSerializer):
     images = ProductVariantImageSerializer(many=True, required=False)
     primary_image_url = serializers.SerializerMethodField()
+    remove_images = serializers.ListField(child=serializers.IntegerField(), required=False)
+    existingImages = serializers.ListField(child=serializers.DictField(), required=False)
+    sku = serializers.CharField(required=False, allow_blank=True)
+    allow_return = serializers.BooleanField(required=False)
+    return_days = serializers.IntegerField(required=False, allow_null=True)
+    allow_replacement = serializers.BooleanField(required=False)
+    replacement_days = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = ProductVariant
         fields = [
-            "id", "variant_name", "base_price", "offer_price", "stock",
-            "sku", "description", "images", "primary_image_url"
+            "id", "variant_name", "base_price", "offer_price", "stock", "featured",
+            "sku", "description", "images", "primary_image_url", "remove_images", "existingImages",
+            "allow_return", "return_days", "allow_replacement", "replacement_days"  # ✅ Added
         ]
-        extra_kwargs = {
-            "variant_name": {"required": True},
-            "base_price": {"required": True},
-            "stock": {"required": True},
-            "sku": {"required": False},
-            "description": {"required": False},
-        }
+
+    def validate(self, attrs):
+        if attrs.get("allow_return") and (not attrs.get("return_days") or attrs["return_days"] <= 0):
+            raise serializers.ValidationError("Return days must be > 0 if returns are allowed.")
+        if attrs.get("allow_replacement") and (not attrs.get("replacement_days") or attrs["replacement_days"] <= 0):
+            raise serializers.ValidationError("Replacement days must be > 0 if replacement is allowed.")
+        return attrs
 
     def get_primary_image_url(self, obj):
         first_image = obj.images.first()
         return first_image.url if first_image else None
 
     def create(self, validated_data):
-        images_data = validated_data.pop('images', [])
-        product = self.context['product']
+        # Remove nested/non-model keys
+        images_data = validated_data.pop("images", [])
+        existing_images = validated_data.pop("existingImages", [])
+        validated_data.pop("remove_images", None)  # remove if present
 
         # Auto-generate SKU if missing
-        if not validated_data.get("sku"):
-            validated_data["sku"] = self.generate_sku(product.name)
+        product = self.context["product"]
+        validated_data["sku"] = validated_data.get("sku") or self.generate_sku(product.name)
 
+        # Create the variant
         variant = ProductVariant.objects.create(product=product, **validated_data)
 
-        for img_data in images_data:
+        # Add all images
+        all_images = existing_images + images_data
+        for img_data in all_images:
             ProductVariantImage.objects.create(variant=variant, **img_data)
 
         return variant
+
+
+    def update(self, instance, validated_data):
+        images_data = validated_data.pop("images", [])
+        existing_images = validated_data.pop("existingImages", [])
+        remove_images = validated_data.pop("remove_images", [])
+
+        if not validated_data.get("sku"):
+            validated_data["sku"] = instance.sku or self.generate_sku(instance.product.name)
+
+        # Delete marked images
+        if remove_images:
+            instance.images.filter(id__in=remove_images).delete()
+
+        # Update fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Merge image data
+        all_images = existing_images + images_data
+        existing_image_map = {img.id: img for img in instance.images.all()}
+        incoming_ids = [img.get("id") for img in all_images if img.get("id")]
+
+        # Delete images not in incoming list
+        if incoming_ids:
+            for img_id in set(existing_image_map) - set(incoming_ids):
+                existing_image_map[img_id].delete()
+
+        # Update or add images
+        for img_data in all_images:
+            img_id = img_data.get("id")
+            if img_id and img_id in existing_image_map:
+                img_instance = existing_image_map[img_id]
+                for k, v in img_data.items():
+                    if k != "id":
+                        setattr(img_instance, k, v)
+                img_instance.save()
+            elif img_data.get("image"):
+                ProductVariantImage.objects.create(variant=instance, **img_data)
+
+        return instance
 
     def generate_sku(self, product_name):
         base = "".join(e for e in product_name if e.isalnum()).upper()[:3]
         rand = "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
         return f"{base}-{rand}"
-    
-    def update(self, instance, validated_data):
-        logger.debug(f"🛠️ ProductAdminSerializer.update called for product {instance.id}")
-        images_data = validated_data.pop("images", [])
-        remove_images = validated_data.pop("remove_images", [])
 
-        # 🔥 Delete marked images FIRST
-        if remove_images:
-            logger.debug(f"🧹 Attempting to delete images from variant {instance.id}: {remove_images}")
-            deleted_count, _ = instance.images.filter(id__in=remove_images).delete()
-            logger.debug(f"✅ Deleted {deleted_count} image(s)")
-
-        # Update basic fields
-        for attr, value in validated_data.items():
-            logger.debug(f"✏️ Updating field '{attr}' to '{value}'")
-            setattr(instance, attr, value)
-        instance.save()
-
-        # Reconcile remaining images
-        existing_images = {img.id: img for img in instance.images.all()}
-        logger.debug(f"📸 Existing images after deletion: {list(existing_images.keys())}")
-
-        incoming_ids = [img.get("id") for img in images_data if img.get("id")]
-        logger.debug(f"📥 Incoming image IDs: {incoming_ids}")
-
-        # Delete images not included in incoming list
-        if images_data:
-            for img_id in set(existing_images) - set(incoming_ids):
-                logger.debug(f"🗑️ Removing image not in incoming list: {img_id}")
-                existing_images[img_id].delete()
-
-        # Update existing or add new
-        for img_data in images_data:
-            img_id = img_data.get("id")
-            if img_id and img_id in existing_images:
-                logger.debug(f"🔄 Updating existing image {img_id}")
-                img_instance = existing_images[img_id]
-                for k, v in img_data.items():
-                    if k != "id":
-                        logger.debug(f"   ↪️ Setting '{k}' to '{v}'")
-                        setattr(img_instance, k, v)
-                img_instance.save()
-            elif img_data.get("image"):
-                logger.debug(f"➕ Adding new image to variant {instance.id}")
-                ProductVariantImage.objects.create(variant=instance, **img_data)
-
-        return instance
-
-    
 class ProductAdminSerializer(serializers.ModelSerializer):
     variants = ProductVariantAdminSerializer(many=True, required=True)
     category_id = serializers.PrimaryKeyRelatedField(
@@ -271,6 +278,16 @@ class ProductAdminSerializer(serializers.ModelSerializer):
         variant_names = [v["variant_name"] for v in attrs.get("variants", [])]
         if len(variant_names) != len(set(variant_names)):
             raise serializers.ValidationError("Duplicate variant names are not allowed.")
+        
+        # Ensure each variant has at least one image
+        for idx, variant in enumerate(attrs.get("variants", []), start=1):
+            images = variant.get("images", [])
+            existing_images = variant.get("existingImages", [])  # for updates
+            total_images = len(images) + len(existing_images or [])
+            if total_images == 0:
+                raise serializers.ValidationError(
+                    f"Variant #{idx} ('{variant.get('variant_name', '')}') must have at least one image."
+                )
         return attrs
 
     def generate_sku(self, product_name):
@@ -301,34 +318,50 @@ class ProductAdminSerializer(serializers.ModelSerializer):
         variants_data = validated_data.pop("variants", None)
         category = validated_data.pop("category_id", None)
 
-        # Handle main product image removal
+        # ---------------- Handle main product image removal ----------------
         if request and request.data.get("remove_image"):
             if instance.image:
                 instance.image.delete(save=False)
             instance.image = None
             instance.image_url = None
 
-        # Update main product fields
+        # ---------------- Update main product fields ----------------
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if category:
             instance.category = category
         instance.save()
 
+        # ---------------- Update variants ----------------
         if variants_data is not None:
             existing_variants = {v.id: v for v in instance.variants.all()}
 
             for variant_data in variants_data:
                 variant_id = variant_data.get("id")
-                # Extract remove_images for this variant
                 remove_images = variant_data.pop("remove_images", [])
 
+                # Filter out images marked for removal
+                images_to_keep = [
+                    img for img in variant_data.get("images", [])
+                    if not (isinstance(img, dict) and img.get("id") in remove_images)
+                ]
+                variant_data["images"] = images_to_keep
+                variant_data["existingImages"] = variant_data.get("existingImages", [])
                 if variant_id and variant_id in existing_variants:
                     variant_instance = existing_variants.pop(variant_id)
+
+                    # Check remaining images
+                    remaining_count = len(images_to_keep) + variant_instance.images.exclude(id__in=remove_images).count()
+                    if remaining_count == 0:
+                        raise serializers.ValidationError(
+                            f"Variant '{variant_instance.variant_name}' must have at least one image."
+                        )
+
                     serializer = ProductVariantAdminSerializer(
                         variant_instance,
                         data=variant_data,
-                        context={"product": instance}
+                        context={"product": instance},
+                        partial=True
                     )
                     serializer.is_valid(raise_exception=True)
                     variant = serializer.save()
@@ -336,8 +369,8 @@ class ProductAdminSerializer(serializers.ModelSerializer):
                     # Delete images marked for removal
                     if remove_images:
                         variant.images.filter(id__in=remove_images).delete()
-
                 else:
+                    # Create new variant
                     serializer = ProductVariantAdminSerializer(
                         data=variant_data,
                         context={"product": instance}
@@ -354,6 +387,7 @@ class ProductAdminSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("A product must have at least one variant.")
 
         return instance
+
 
 class CustomerSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()

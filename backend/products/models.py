@@ -12,15 +12,28 @@ class Category(models.Model):
     slug = models.SlugField(unique=True)
 
     def save(self, *args, **kwargs):
+        # Generate slug if not present
         if not self.slug:
             base_slug = slugify(self.name)
             slug = base_slug
             while Category.objects.filter(slug=slug).exists():
                 slug = f"{base_slug}-{get_random_string(4)}"
             self.slug = slug
-        if self.image and not self.image_url:
-            self.image_url = self.image.url
+
         super().save(*args, **kwargs)
+
+        # Upload to Cloudinary if needed
+        if self.image and (not self.image_url or 'res.cloudinary.com' not in self.image_url):
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    self.image.file,  # use .file not .path
+                    folder='ecommerce/category_images'
+                )
+                self.image_url = upload_result.get('secure_url')
+                self.image.delete(save=False)
+                super().save(update_fields=['image_url'])
+            except Exception as e:
+                print(f"Cloudinary upload failed: {e}")
 
     def __str__(self):
         return self.name
@@ -28,7 +41,7 @@ class Category(models.Model):
 
 class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True)
     description = models.TextField()
     is_available = models.BooleanField(default=True)
@@ -66,7 +79,7 @@ class Product(models.Model):
 
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
-    variant_name = models.CharField(max_length=50)
+    variant_name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     promoter_commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     sku = models.CharField(max_length=50, unique=True)
@@ -78,6 +91,7 @@ class ProductVariant(models.Model):
     return_days = models.PositiveIntegerField(null=True, blank=True)
     allow_replacement = models.BooleanField(default=False)
     replacement_days = models.PositiveIntegerField(null=True, blank=True)
+    featured = models.BooleanField(default=False)
 
     def clean(self):
         errors = {}

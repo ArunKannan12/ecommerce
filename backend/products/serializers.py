@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
+from django.db.models import Q
 from .models import Category, Product, ProductVariant, ProductVariantImage, Banner
 
 # Configurable thresholds
@@ -11,24 +12,65 @@ NEW_PRODUCT_DAYS = getattr(settings, "NEW_PRODUCT_DAYS", 7)
 
 # -------------------- CATEGORY --------------------
 class CategorySerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(write_only=True, required=False)
     image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
         fields = ['id', 'name', 'slug', 'image', 'image_url']
+        read_only_fields = ['id', 'image_url', 'slug']
 
     def get_image_url(self, obj):
         request = self.context.get('request')
+        if obj.image_url:
+            return obj.image_url
         if obj.image:
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
 
+    def create(self, validated_data):
+        image_file = validated_data.pop("image", None)
+        category = Category(**validated_data)
+
+        if image_file:
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    image_file,
+                    folder="ecommerce/category_images"
+                )
+                category.image_url = upload_result.get("secure_url")
+            except Exception as e:
+                raise serializers.ValidationError(f"Cloudinary upload failed: {e}")
+
+        category.save()
+        return category
+
     def update(self, instance, validated_data):
         request = self.context.get('request')
-        if request and request.data.get('remove_image') and instance.image:
+        image_file = validated_data.pop("image", None)
+
+        # Remove existing image if requested
+        if request and request.data.get("remove_image") and instance.image:
             instance.image.delete(save=False)
             instance.image = None
-        return super().update(instance, validated_data)
+            instance.image_url = None
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if image_file:
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    image_file,
+                    folder="ecommerce/category_images"
+                )
+                instance.image_url = upload_result.get("secure_url")
+            except Exception as e:
+                raise serializers.ValidationError(f"Cloudinary upload failed: {e}")
+
+        instance.save()
+        return instance
+
 
 # -------------------- PRODUCT VARIANT IMAGE --------------------
 class ProductVariantImageSerializer(serializers.ModelSerializer):
@@ -68,7 +110,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariant
         fields = [
-            'id', 'variant_name', 'description', 'sku', 'base_price',
+            'id', 'variant_name', 'description', 'sku', 'base_price','featured',
             'offer_price', 'final_price', 'discount_percent', 'stock',
             'is_low_stock', 'is_active', 'promoter_commission_rate', 'images', 'primary_image_url',
             'product_id', 'product_name', 'product_slug', 'product_category', 'product_created_at', 'is_new',
@@ -156,12 +198,13 @@ class ProductSerializer(serializers.ModelSerializer):
     total_stock = serializers.SerializerMethodField()
     is_low_stock = serializers.SerializerMethodField()
     is_new = serializers.SerializerMethodField()
+    matched_variant = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'slug', 'description', 'is_available', 'featured',
-            'created_at', 'image_url', 'category', 'variants',
+            'created_at', 'image_url', 'category', 'variants','matched_variant',
             'min_price', 'max_price', 'total_stock', 'is_low_stock', 'is_new'
         ]
 
@@ -171,7 +214,20 @@ class ProductSerializer(serializers.ModelSerializer):
             return obj.image_url or (obj.image.url if obj.image else None)
         except ValueError:
             return obj.image_url or None
+    def get_matched_variant(self, obj):
+        query = self.context.get("search_query", "").lower()
+        if not query:
+            return None
 
+        match = obj.variants.filter(
+            Q(variant_name__icontains=query) |
+            Q(description__icontains=query) |
+            Q(sku__icontains=query)
+        ).first()
+
+        if match:
+            return ProductVariantSerializer(match, context=self.context).data
+        return None
     # ---------------- Calculated fields ----------------
     def get_min_price(self, obj):
         if obj.variants.exists():

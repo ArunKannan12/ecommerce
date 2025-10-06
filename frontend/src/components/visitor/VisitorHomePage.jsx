@@ -19,9 +19,11 @@ const VisitorHomePage = () => {
       />
 
       {/* Main content */}
-      <div className=" px-4">
+      <div className="pb-16 md:pb-0">
         <Outlet />
       </div>
+
+
 
       {/* Mobile bottom nav */}
       <BottomNav

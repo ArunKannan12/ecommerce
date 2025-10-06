@@ -144,9 +144,7 @@ const ProductDetail = () => {
     basePrice > 0 && finalPrice < basePrice
       ? Math.round(((basePrice - finalPrice) / basePrice) * 100)
       : 0;
-  
-      // Check if selected variant is in cart
-    
+
 
   return (
     <div className="p-6">
@@ -292,93 +290,129 @@ const ProductDetail = () => {
       )}
 
       {/* Return & Replacement Info */}
-      {selectedVariant && (selectedVariant.allow_return || selectedVariant.allow_replacement) && (
+      {selectedVariant && (
         <div className="mt-6 bg-gray-50 border rounded-xl p-4 sm:p-5 text-sm text-gray-700 space-y-2">
           <h3 className="text-base font-semibold text-gray-800 mb-2">Return & Replacement Policy</h3>
-          <ul className="list-disc list-inside space-y-1">
-            {selectedVariant.allow_return && (
+          
+          {/* ✅ Both return & replacement available */}
+          {selectedVariant.allow_return && selectedVariant.allow_replacement && (
+            <ul className="list-disc list-inside space-y-1">
               <li>
                 <span className="font-medium text-gray-900">Return available:</span> within {selectedVariant.return_days} days of delivery
               </li>
-            )}
-            {selectedVariant.allow_replacement && (
               <li>
                 <span className="font-medium text-gray-900">Replacement available:</span> within {selectedVariant.replacement_days} days of delivery
               </li>
-            )}
-          </ul>
+            </ul>
+          )}
+
+          {/* ✅ Only return available */}
+          {selectedVariant.allow_return && !selectedVariant.allow_replacement && (
+            <p className="text-gray-700">
+              <span className="font-medium">Return available:</span> within {selectedVariant.return_days} days of delivery. <br />
+              <span className="text-red-500 font-semibold">Replacement is not available for this product.</span>
+            </p>
+          )}
+
+          {/* ✅ Only replacement available */}
+          {!selectedVariant.allow_return && selectedVariant.allow_replacement && (
+            <p className="text-gray-700">
+              <span className="font-medium">Replacement available:</span> within {selectedVariant.replacement_days} days of delivery. <br />
+              <span className="text-red-500 font-semibold">Return is not available for this product.</span>
+            </p>
+          )}
+
+          {/* ✅ Neither return nor replacement */}
+          {!selectedVariant.allow_return && !selectedVariant.allow_replacement && (
+            <p className="text-red-500 font-semibold">Return and Replacement are not available for this product.</p>
+          )}
+
           <p className="text-xs text-gray-500 mt-2">
             Please ensure the item is unused and in original packaging to be eligible.
           </p>
         </div>
       )}
+
+
+
     </div>
   </div>
 
   {/* Related Products */}
-  {relatedProducts.length > 0 && (
-    <div className="mt-12">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Related Products</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        {relatedProducts.map((rp) => {
-          const minBasePrice = rp.variants?.length
-            ? Math.min(...rp.variants.map(v => parseFloat(v.base_price)))
-            : null;
-          const minOfferPrice = rp.variants?.length
-            ? Math.min(...rp.variants.map(v => parseFloat(v.final_price)))
-            : null;
-          const discount =
-            minBasePrice && minOfferPrice
-              ? Math.round(((minBasePrice - minOfferPrice) / minBasePrice) * 100)
-              : 0;
-          return (
-            <div
-              key={rp.id}
-              className="group relative bg-white border rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
-              onClick={() => navigate(`/products/${rp.slug}`)}
-            >
-              <div className="w-full h-48 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
-                {rp.variants?.length > 0 && rp.variants[0].images?.length > 0 ? (
-                  <img
-                    src={rp.variants[0].images[0].image_url}
-                    alt={rp.name}
-                    className="max-w-full max-h-full object-contain transform group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : rp.image_url ? (
-                  <img
-                    src={rp.image_url}
-                    alt={rp.name}
-                    className="max-w-full max-h-full object-contain transform group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="text-gray-400 text-center w-full">No Image</div>
-                )}
-              </div>
+  <div className="mt-8 px-4 sm:px-6 lg:px-12">
+  <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-gray-800">Related Products</h2>
 
-              <div className="p-4">
-                <h3 className="text-base font-semibold text-gray-800 group-hover:text-[#155dfc] line-clamp-1">
-                  {rp.name}
-                </h3>
-                {minOfferPrice !== null && (
-                  <div className="mt-1 flex items-center gap-2">
-                    <p className="text-lg font-bold text-green-700">₹{minOfferPrice}</p>
-                    {minBasePrice && minBasePrice > minOfferPrice && (
-                      <>
-                        <p className="text-sm text-gray-500 line-through">₹{minBasePrice}</p>
-                        <span className="text-sm font-medium text-red-600">
-                          {discount}% OFF
-                        </span>
-                      </>
-                    )}
-                  </div>
+  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
+    {relatedProducts.map((rp) => {
+      const minBasePrice = rp.variants?.length
+        ? Math.min(...rp.variants.map(v => parseFloat(v.base_price)))
+        : null;
+      const minOfferPrice = rp.variants?.length
+        ? Math.min(...rp.variants.map(v => parseFloat(v.final_price)))
+        : null;
+      const discount =
+        minBasePrice && minOfferPrice
+          ? Math.round(((minBasePrice - minOfferPrice) / minBasePrice) * 100)
+          : 0;
+
+      return (
+        <div
+          key={rp.id}
+          className="group relative bg-white border rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer flex flex-col"
+          onClick={() => navigate(`/products/${rp.slug}`)}
+        >
+          <div className="w-full aspect-[4/3] flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+            {rp.variants?.[0]?.images?.[0]?.image_url ? (
+              <img
+                src={rp.variants[0].images[0].image_url}
+                alt={rp.name}
+                className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : rp.image_url ? (
+              <img
+                src={rp.image_url}
+                alt={rp.name}
+                className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : (
+              <div className="text-gray-400 text-center w-full">No Image</div>
+            )}
+          </div>
+
+          <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
+            <h3 className="text-sm sm:text-base font-semibold text-gray-800 group-hover:text-[#155dfc] truncate">
+              {rp.name}
+            </h3>
+
+            {minOfferPrice !== null && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="text-base sm:text-lg font-bold text-green-700">
+                  ₹{minOfferPrice}
+                </p>
+
+                {minBasePrice && minBasePrice > minOfferPrice && (
+                  <>
+                    <p className="text-sm text-gray-500 line-through">
+                      ₹{minBasePrice}
+                    </p>
+                    <span className="text-sm font-semibold text-red-600 whitespace-nowrap">
+                      {discount}% OFF
+                    </span>
+                  </>
                 )}
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  )}
+            )}
+          </div>
+        </div>
+      );
+    })}
+  </div>
+
+  {/* Add bottom spacer for mobile so last row isn't hidden */}
+  <div className="h-[100px] sm:hidden"></div>
+</div>
+
+
 </div>
 
   );

@@ -88,11 +88,13 @@ const OrderTracker = ({
   return (
     <div className="w-full px-4 py-6">
   <div className="max-w-6xl mx-auto">
-    <h3 className="text-xl font-bold text-center mb-8 text-gray-900">📍 Order Status Tracker</h3>
+    <h3 className="text-xl sm:text-2xl font-bold text-center mb-8 text-gray-900">
+      📍 Order Status Tracker
+    </h3>
 
     <div className="relative flex flex-col sm:flex-row sm:justify-between sm:items-start gap-10 sm:gap-0">
-      {/* Horizontal connector line for large screens */}
-      <div className="absolute top-5 left-0 right-0 h-[2px] bg-gray-200 z-0 hidden sm:block" />
+      {/* Horizontal connector line for desktop */}
+      <div className="hidden sm:block absolute top-5 left-0 right-0 h-[2px] bg-gray-200 z-0" />
 
       {allSteps.map((step, idx) => {
         const isDetached = step.detached;
@@ -121,24 +123,28 @@ const OrderTracker = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.05, duration: 0.3 }}
-            className="relative z-10 flex flex-col items-center sm:w-1/6"
+            className="relative z-10 flex flex-col sm:flex-1 items-center text-center"
           >
             {/* Step Circle */}
             <div
-              className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-lg ${circleColor}`}
+              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 flex items-center justify-center font-bold text-lg sm:text-xl ${circleColor}`}
             >
               {stepIcons[step.key] || "•"}
             </div>
 
-            {/* Connector line for mobile */}
+            {/* Connector line for mobile (vertical) */}
             {idx < allSteps.length - 1 && !step.detached && (
-              <div className="w-[2px] h-6 bg-gray-300 mt-1 sm:hidden"></div>
+              <div className="sm:hidden w-[2px] h-6 bg-gray-300 mt-1"></div>
             )}
 
             {/* Step Label */}
-            <p className="mt-2 text-sm font-semibold text-center text-gray-800">{step.label}</p>
+            <p className="mt-2 text-xs sm:text-sm md:text-base font-semibold text-gray-800">
+              {step.label}
+            </p>
             {timeText && !isDetached && (
-              <p className="text-xs text-gray-500 text-center">{timeText}</p>
+              <p className="text-[10px] sm:text-xs md:text-sm text-gray-500">
+                {timeText}
+              </p>
             )}
 
             {/* Cancel Info */}
@@ -178,6 +184,7 @@ const OrderTracker = ({
     </div>
   </div>
 </div>
+
   );
 };
 

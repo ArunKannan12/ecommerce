@@ -29,7 +29,8 @@ from .views import (
                     AdminDeliveryManStatsAPIView,
                     AdminBannerListAPIView,
                     BannerCreateAPIView,
-                    BannerUpdateDestroyAPIView
+                    BannerUpdateDestroyAPIView,
+                    VariantBulkActionAPIView
                     )
 from orders.returnReplacement import ReturnRequestUpdateAPIView,ReplacementRequestUpdateAPIView
 
@@ -38,6 +39,7 @@ urlpatterns = [
     path('admin/create-products/',ProductAdminCreateAPIView.as_view(),name='admin-products'),
     path('admin/products/<int:id>/', ProductAdminDetailAPIView.as_view()),
     path("admin/products/bulk-action/", ProductBulkActionAPIView.as_view(), name=""),
+    path("admin/variants/bulk-action/", VariantBulkActionAPIView.as_view(), name="variant-bulk-action"),
     
     path('admin/customers/', CustomerListAPIView.as_view(), name='admin-customer-list'),
     path("admin/customers/<int:id>/", CustomerDetailAPIView.as_view(), name="admin-customer-detail"),

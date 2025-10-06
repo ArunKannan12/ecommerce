@@ -57,63 +57,59 @@ const Home = () => {
   <p className="text-gray-600">No featured products</p>
 ) : (
   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-    {featured.map((prod) => {
-      const activeVariants = prod.variants?.filter(v => v.is_active) || [];
-
-      const cheapestVariant = activeVariants.reduce((lowest, current) => {
-        const currentPrice = parseFloat(current.final_price || current.offer_price || current.base_price || "0");
-        const lowestPrice = parseFloat(lowest.final_price || lowest.offer_price || lowest.base_price || "0");
-        return currentPrice < lowestPrice ? current : lowest;
-      }, activeVariants[0]);
-
-      const finalPrice = parseFloat(cheapestVariant?.final_price || "0");
-      const basePrice = parseFloat(cheapestVariant?.base_price || "0");
+    {featured.map((variant) => {
+      const finalPrice = parseFloat(variant.final_price || "0");
+      const basePrice = parseFloat(variant.base_price || "0");
       const isDiscounted = basePrice > 0 && finalPrice < basePrice;
       const discountPercent = isDiscounted
         ? Math.round(((basePrice - finalPrice) / basePrice) * 100)
         : 0;
 
       const imageUrl =
-        cheapestVariant?.primary_image_url ||
-        cheapestVariant?.images?.[0]?.url ||
-        prod.image_url ||
-        prod.category?.image_url ||
+        variant.primary_image_url ||
+        variant.images?.[0]?.image_url ||
+        variant.product_category?.image_url ||
         "/placeholder.png";
 
       return (
         <Link
-          key={prod.id}
-          to={`/products/${prod.slug}`}
+          key={variant.id}
+          to={`/products/${variant.product_slug}?variant=${variant.id}`}
           className="group block bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition duration-300"
         >
           {/* Image */}
           <div className="relative w-full aspect-[4/3]">
             <img
               src={imageUrl}
-              alt={prod.name}
+              alt={variant.variant_name}
               loading="lazy"
               className="object-cover w-full h-full transition duration-300 group-hover:scale-105"
             />
-            {prod.featured && (
+            {variant.featured && (
               <span className="absolute top-2 left-2 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">
                 Featured
+              </span>
+            )}
+            {variant.is_new && (
+              <span className="absolute top-2 right-2 bg-pink-600 text-white text-xs font-semibold px-2 py-1 rounded">
+                New
               </span>
             )}
           </div>
 
           {/* Info */}
           <div className="p-2 sm:p-3">
-            <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-1 truncate">
-              {prod.name}
+            <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-1 line-clamp-2">
+              {variant.product_name}
             </h2>
             <p className="text-xs text-gray-600 mb-1 line-clamp-2">
-              {prod.description}
+              {variant.variant_name}
             </p>
 
             {/* Pricing */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm sm:text-base font-bold text-gray-800">
-                From ₹{finalPrice.toFixed(2)}
+                ₹{finalPrice.toFixed(2)}
               </span>
               {isDiscounted && (
                 <>
@@ -125,17 +121,12 @@ const Home = () => {
                   </span>
                 </>
               )}
-              {activeVariants.length > 1 && (
-                <span className="text-[10px] sm:text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
-                  {activeVariants.length} options
-                </span>
-              )}
             </div>
 
             {/* Stock */}
-            {cheapestVariant?.stock > 0 && cheapestVariant?.stock < 5 && (
+            {variant.stock > 0 && variant.stock < 5 && (
               <p className="mt-1 text-[10px] sm:text-xs text-red-600 font-medium">
-                Only {cheapestVariant.stock} left!
+                Only {variant.stock} left!
               </p>
             )}
           </div>

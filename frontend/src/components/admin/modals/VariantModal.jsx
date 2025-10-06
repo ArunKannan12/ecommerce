@@ -11,6 +11,11 @@ const VariantModal = ({ product, onClose }) => {
   const [basePrice, setBasePrice] = useState("");
   const [offerPrice, setOfferPrice] = useState("");
   const [stock, setStock] = useState("");
+  const [allowReturn, setAllowReturn] = useState(false);
+  const [returnDays, setReturnDays] = useState("");
+  const [allowReplacement, setAllowReplacement] = useState(false);
+  const [replacementDays, setReplacementDays] = useState("");
+
 
   const fetchVariants = async () => {
     setLoading(true);
@@ -57,42 +62,84 @@ const VariantModal = ({ product, onClose }) => {
       >
         <h3 className="text-xl font-bold mb-4">{product.name} Variants</h3>
 
-        <form onSubmit={handleAddVariant} className="flex gap-2 mb-4">
-          <input
-            type="text"
-            placeholder="Variant Name"
-            value={variantName}
-            onChange={(e) => setVariantName(e.target.value)}
-            required
-            className="flex-1 p-2 border rounded"
-          />
-          <input
-            type="number"
-            placeholder="Base Price"
-            value={basePrice}
-            onChange={(e) => setBasePrice(e.target.value)}
-            required
-            className="w-24 p-2 border rounded"
-          />
-          <input
-            type="number"
-            placeholder="Offer Price"
-            value={offerPrice}
-            onChange={(e) => setOfferPrice(e.target.value)}
-            className="w-24 p-2 border rounded"
-          />
-          <input
-            type="number"
-            placeholder="Stock"
-            value={stock}
-            onChange={(e) => setStock(e.target.value)}
-            required
-            className="w-20 p-2 border rounded"
-          />
-          <button className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
-            Add
-          </button>
+        <form onSubmit={handleAddVariant} className="flex flex-col gap-2 mb-4">
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="text"
+              placeholder="Variant Name"
+              value={variantName}
+              onChange={(e) => setVariantName(e.target.value)}
+              required
+              className="flex-1 p-2 border rounded"
+            />
+            <input
+              type="number"
+              placeholder="Base Price"
+              value={basePrice}
+              onChange={(e) => setBasePrice(e.target.value)}
+              required
+              className="w-24 p-2 border rounded"
+            />
+            <input
+              type="number"
+              placeholder="Offer Price"
+              value={offerPrice}
+              onChange={(e) => setOfferPrice(e.target.value)}
+              className="w-24 p-2 border rounded"
+            />
+            <input
+              type="number"
+              placeholder="Stock"
+              value={stock}
+              onChange={(e) => setStock(e.target.value)}
+              required
+              className="w-20 p-2 border rounded"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-4 mt-2 items-center">
+            <div className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={allowReturn}
+                onChange={() => setAllowReturn(!allowReturn)}
+              />
+              <label>Allow Return</label>
+              {allowReturn && (
+                <input
+                  type="number"
+                  placeholder="Return Days"
+                  value={returnDays}
+                  onChange={(e) => setReturnDays(e.target.value)}
+                  className="w-24 p-1 border rounded ml-2"
+                />
+              )}
+            </div>
+
+            <div className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={allowReplacement}
+                onChange={() => setAllowReplacement(!allowReplacement)}
+              />
+              <label>Allow Replacement</label>
+              {allowReplacement && (
+                <input
+                  type="number"
+                  placeholder="Replacement Days"
+                  value={replacementDays}
+                  onChange={(e) => setReplacementDays(e.target.value)}
+                  className="w-24 p-1 border rounded ml-2"
+                />
+              )}
+            </div>
+
+            <button className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+              Add
+            </button>
+          </div>
         </form>
+
 
         {loading ? (
           <p>Loading variants...</p>

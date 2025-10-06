@@ -4,12 +4,12 @@ import {Listbox,Transition} from '@headlessui/react'
 
 const sortOptions = [
   { name: "Default", value: "" },
-  { name: "Price: Low to High", value: "price" },
-  { name: "Price: High to Low", value: "-price" },
-  { name: "Newest First", value: "created_at" },
-  { name: "Oldest First", value: "-created_at" },
-  { name: "Name: A-Z", value: "name" },
-  { name: "Name: Z-A", value: "-name" },
+  { name: "Price: Low to High", value: "offer_price" },
+  { name: "Price: High to Low", value: "-offer_price" },
+  { name: "Newest First", value: "-product__created_at" },
+  { name: "Oldest First", value: "product__created_at" },
+  { name: "Name: A-Z", value: "product__name" },
+  { name: "Name: Z-A", value: "-product__name" },
 ];
 
 const CustomSortDropdown = ({ ordering, updateFilters }) => {

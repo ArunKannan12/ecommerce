@@ -170,55 +170,87 @@ def verify_razorpay_payment(order, razorpay_order_id, razorpay_payment_id, razor
     }
 
 
-def process_checkout(user, items=None, shipping_address_input=None, payment_method=None, promoter_code=None, is_cart=False, existing_order=None):
+def process_checkout(
+    user,
+    items=None,
+    shipping_address_input=None,
+    payment_method=None,
+    promoter_code=None,
+    is_cart=False,
+    existing_order=None
+):
     """
     Unified checkout handler for:
     - Referral checkout
     - Cart checkout
     - Buy Now
     - Existing order payment (existing_order)
+    
     Returns a dict with keys:
     - 'order': the Order instance
     - 'response': the serialized response dict for API
     """
-    # If an existing order is provided, skip order creation
+    razorpay_order = None  # ensure defined
+
+    # ---------------- Handle existing order ----------------
     if existing_order:
         order = existing_order
-        if payment_method:
+
+        # Update payment method if provided and different
+        if payment_method and order.payment_method != payment_method:
             validate_payment_method(payment_method)
             order.payment_method = payment_method
             order.save(update_fields=["payment_method"])
-    else:
-        # Validate shipping address
-        shipping_address = validate_shipping_address(user, shipping_address_input)
-        # Validate promoter if provided
-        promoter = validate_promoter(promoter_code) if promoter_code else None
-        # Validate payment method
-        validate_payment_method(payment_method)
 
-        # Create order with items
-        order, _ = create_order_with_items(
-            user=user,
-            items=items,
-            shipping_address=shipping_address,
-            payment_method=payment_method,
-            promoter=promoter
-        )
+        # Create Razorpay order only if unpaid and method is Razorpay
+        if not order.is_paid and order.payment_method == "Razorpay":
+            if not order.razorpay_order_id:
+                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                razorpay_order = client.order.create({
+                    "amount": int(order.total * 100),
+                    "currency": "INR",
+                    "receipt": f"order_rcptid_{order.order_number}",
+                    "payment_capture": 1
+                })
+                order.razorpay_order_id = razorpay_order.get("id")
+                order.save(update_fields=["razorpay_order_id"])
+            else:
+                # reuse existing Razorpay order id
+                razorpay_order = {
+                    "id": order.razorpay_order_id,
+                    "amount": int(order.total * 100),
+                    "currency": "INR"
+                }
 
-    # Handle Cash on Delivery
+        response_data = prepare_order_response(order, razorpay_order)
+        return {"order": order, "response": response_data}
+
+    # ---------------- New order creation ----------------
+    shipping_address = validate_shipping_address(user, shipping_address_input)
+    promoter = validate_promoter(promoter_code) if promoter_code else None
+    validate_payment_method(payment_method)
+
+    order, _ = create_order_with_items(
+        user=user,
+        items=items,
+        shipping_address=shipping_address,
+        payment_method=payment_method,
+        promoter=promoter
+    )
+
+    # ---------------- Handle Cash on Delivery ----------------
     if order.payment_method == "Cash on Delivery":
         order.status = "pending"
         order.is_paid = False
         order.save(update_fields=["status", "is_paid", "payment_method"])
 
-        # Clear cart if applicable
         if is_cart and items:
             items.delete()
 
         response_data = prepare_order_response(order, razorpay_order=None)
         return {"order": order, "response": response_data}
 
-    # Razorpay handling
+    # ---------------- Razorpay handling for new orders ----------------
     client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
     razorpay_order = client.order.create({
         "amount": int(order.total * 100),

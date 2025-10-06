@@ -1,128 +1,207 @@
-import React, { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect } from "react";
 
-const VariantForm = ({
-  variant,
-  index,
-  onChange,
-  onRemove,
-  onImageChange,
-  onRemoveExistingImage,
-}) => {
-  const objectUrlsRef = useRef([]);
-  const [previewImages, setPreviewImages] = useState([]);
+const VariantForm = ({variant,index,onChange,onRemove, onAddImages,onRemoveExistingImage,onRemoveNewImage}) => {
+  const [previews, setPreviews] = useState([]);
 
-  // Update previews for newly uploaded images
+  // ---------------- Previews for new images ----------------
   useEffect(() => {
-    // Clean old URLs
-    objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    objectUrlsRef.current = [];
-
-    const urls = variant.images.map((file) => {
-      const url = URL.createObjectURL(file);
-      objectUrlsRef.current.push(url);
-      return url;
-    });
-
-    setPreviewImages(urls);
-
-    return () => objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    if (!variant.images || !variant.images.length) {
+      setPreviews([]);
+      return;
+    }
+    const objectUrls = variant.images.map(file => URL.createObjectURL(file));
+    setPreviews(objectUrls);
+    return () => objectUrls.forEach(url => URL.revokeObjectURL(url));
   }, [variant.images]);
 
-  const handleChange = (field, value) => {
+  const handleInputChange = (field, value) => {
     onChange(index, field, value);
   };
 
-  const handleFiles = (files) => {
-    onImageChange(index, Array.from(files));
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    onAddImages(index, files);
+
+    // Clear input so next selection works correctly
+    e.target.value = null;
   };
-
   return (
-    <motion.div
-      className="relative border p-4 rounded-2xl mb-5 bg-gray-50 shadow hover:shadow-lg transition"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-    >
-      {/* Header */}
-      <div className="flex justify-between items-center mb-3">
-        <h5 className="font-medium text-gray-800">
-          {variant.variant_name || `Variant ${index + 1}`}
-        </h5>
-        <button
-          type="button"
-          onClick={() => onRemove(index)}
-          className="text-red-500 text-sm font-medium"
-        >
-          Remove
-        </button>
-      </div>
-
-      {/* Variant Fields */}
-      <div className="grid md:grid-cols-2 gap-4 mb-4">
-        {["variant_name", "description", "base_price", "offer_price", "stock"].map((field) => (
-          <div key={field}>
-            <label className="font-semibold">{field.replace("_", " ").toUpperCase()}</label>
+    <div className="border p-3 rounded-lg relative">
+      <button
+        type="button"
+        onClick={() => onRemove(index)}
+        className="absolute top-2 right-2 text-red-500 font-bold"
+      >
+        ✕
+      </button>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {/* Variant Name */}
+        <div>
+          <label className="font-semibold">Variant Name</label>
+          <input
+            type="text"
+            value={variant.variant_name}
+            onChange={e => handleInputChange("variant_name", e.target.value)}
+            className="w-full border px-2 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+        {/* Base Price */}
+        <div>
+          <label className="font-semibold">Base Price</label>
+          <input
+            type="number"
+            value={variant.base_price}
+            onChange={e => handleInputChange("base_price", e.target.value)}
+            className="w-full border px-2 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+        {/* Offer Price */}
+        <div>
+          <label className="font-semibold">Offer Price</label>
+          <input
+            type="number"
+            value={variant.offer_price}
+            onChange={e => handleInputChange("offer_price", e.target.value)}
+            className="w-full border px-2 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+        {/* Stock */}
+        <div>
+          <label className="font-semibold">Stock</label>
+          <input
+            type="number"
+            value={variant.stock}
+            onChange={e => handleInputChange("stock", e.target.value)}
+            className="w-full border px-2 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+        {/* Featured Toggle */}
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!variant.featured}
+            onChange={() => handleInputChange("featured", !variant.featured)}
+            id={`featured-${index}`}
+          />
+          <label htmlFor={`featured-${index}`} className="font-semibold">
+            Mark as Featured
+          </label>
+        </div>
+        {/* Description */}
+        <div className="sm:col-span-2">
+          <label className="font-semibold">Description</label>
+          <textarea
+            value={variant.description}
+            onChange={e => handleInputChange("description", e.target.value)}
+            className="w-full border px-2 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+            rows={2}
+          />
+        </div>
+        {/* Return & Replacement */}
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={variant.allow_return}
+            onChange={() => handleInputChange("allow_return", !variant.allow_return)}
+            id={`return-${index}`}
+          />
+          <label htmlFor={`return-${index}`} className="font-semibold">
+            Allow Return
+          </label>
+          {variant.allow_return && (
             <input
-              type={field.includes("price") || field === "stock" ? "number" : "text"}
-              value={variant[field]}
-              onChange={(e) => handleChange(field, e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              type="number"
+              value={variant.return_days}
+              onChange={e => handleInputChange("return_days", e.target.value)}
+              className="w-20 border px-2 py-1 rounded-lg"
+              placeholder="Days"
             />
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={variant.allow_replacement}
+            onChange={() => handleInputChange("allow_replacement", !variant.allow_replacement)}
+            id={`replacement-${index}`}
+          />
+          <label htmlFor={`replacement-${index}`} className="font-semibold">
+            Allow Replacement
+          </label>
+          {variant.allow_replacement && (
+            <input
+              type="number"
+              value={variant.replacement_days}
+              onChange={e => handleInputChange("replacement_days", e.target.value)}
+              className="w-20 border px-2 py-1 rounded-lg"
+              placeholder="Days"
+            />
+          )}
+        </div>
+        {/* Existing Images */}
+        {variant.existingImages?.length > 0 && (
+          <div className="sm:col-span-2 flex gap-2 flex-wrap mt-2">
+            {variant.existingImages.map((img, i) => (
+              <div key={img.id || i} className="relative">
+                <img
+                  src={img.url}
+                  alt={`Existing ${i}`}
+                  className="w-20 h-20 object-cover rounded border"
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemoveExistingImage(index, i)}
+                  className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                  aria-label="Remove existing image"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        )}
+        {/* New Images */}
+        {previews.length > 0 && (
+          <div className="sm:col-span-2 flex gap-2 flex-wrap mt-2">
+            {previews.map((url, i) => (
+              <div key={i} className="relative">
+                <img
+                  src={url}
+                  alt={`Preview ${i}`}
+                  className="w-20 h-20 object-cover rounded border"
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemoveNewImage(index, i)}
+                  className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Upload New Images */}
+        <div className="sm:col-span-2">
+          <label className="font-semibold">Upload Images</label>
+          <input
+            type="file"
+            multiple
+            onChange={(e) => {
+              const files = Array.from(e.target.files);
+              if (!files.length) return;
+              onAddImages(index, files);
 
-      {/* Variant Images */}
-      <div>
-        <label className="block mb-1 font-medium text-gray-700">Variant Images</label>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => handleFiles(e.target.files)}
-          className="mb-2"
-        />
-
-        <div className="flex flex-wrap gap-2 mt-2">
-          {/* New uploads */}
-          {previewImages.map((src, i) => (
-            <div key={`new-${i}`} className="relative">
-              <img src={src} className="w-16 h-16 object-cover rounded-md border shadow" />
-              <button
-                type="button"
-                onClick={() => {
-                  const newFiles = [...variant.images];
-                  newFiles.splice(i, 1);
-                  onImageChange(index, newFiles);
-                }}
-                className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-
-          {/* Existing images */}
-          {variant.existingImages.map((img, i) => (
-            <div key={`existing-${i}`} className="relative">
-              <img
-                src={img.url || img}
-                className="w-16 h-16 object-cover rounded-md border shadow"
-              />
-              <button
-                type="button"
-                onClick={() => onRemoveExistingImage(index, i)}
-                className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+              // Reset input so same file can be selected again
+              e.target.value = null;
+            }}
+            accept="image/*"
+            className="w-full mt-1"
+          />
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
-
 export default VariantForm;

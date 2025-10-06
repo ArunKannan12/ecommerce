@@ -9,6 +9,7 @@ import PaymentMethodSelector from "./PaymentMethodSelector";
 import CheckoutSummary from "./CheckoutSummary";
 import { handleRazorpayPayment } from "../../utils/payment";
 import { useAuth } from "../../contexts/authContext";
+import CartShimmer from "../../shimmer/CartShimmer";
 
 const BUY_NOW_KEY = "buyNowMinimal";
 
@@ -177,17 +178,18 @@ const Checkout = () => {
    * ------------------------ */
   useEffect(() => {
     const fetchPreview = async () => {
-      if (!cartItems.length || !selectedAddress?.postal_code) return;
-
+      if (!cartItems.length || !selectedAddress?.postal_code) {
+        
+        return;
+      }
+      const payload = {
+        items: cartItems.map((item) => ({
+          product_variant_id: item.product_variant_id,
+          quantity: item.quantity,
+        })),
+        postal_code: selectedAddress.postal_code,
+      };
       try {
-        const payload = {
-          items: cartItems.map((item) => ({
-            product_variant_id: item.product_variant_id,
-            quantity: item.quantity,
-          })),
-          postal_code: selectedAddress.postal_code,
-        };
-
         const res = await axiosInstance.post("checkout/preview/", payload);
         setOrderPreview(res.data);
       } catch (error) {
@@ -198,6 +200,7 @@ const Checkout = () => {
 
     fetchPreview();
   }, [cartItems, selectedAddress]);
+
 
   /** ------------------------
    *  PLACE ORDER
@@ -307,8 +310,9 @@ const Checkout = () => {
   /** ------------------------
    *  RENDER
    * ------------------------ */
-  if (loading || authLoading) return <p className="p-6">Loading cart...</p>;
-
+  if (loading || authLoading) return <CartShimmer/>;
+  console.log(orderPreview,'c');
+  
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
       <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
@@ -325,12 +329,21 @@ const Checkout = () => {
             paymentMethod={paymentMethod}
             setPaymentMethod={setPaymentMethod}
           />
-          <CheckoutSummary
-            subtotal={orderPreview.subtotal}
-            deliveryCharge={orderPreview.delivery_charge}
-            totalAmount={orderPreview.total}
-            onPlaceOrder={handlePlaceOrder}
-          />
+          {orderPreview ? (
+            <CheckoutSummary
+              subtotal={orderPreview.subtotal}
+              deliveryCharge={orderPreview.delivery_charge}
+              totalAmount={orderPreview.total}
+              onPlaceOrder={handlePlaceOrder}
+            />
+          ) : (
+            <div className="text-center text-gray-500 mt-6">
+              {selectedAddress?.postal_code
+                ? "Loading order summary..."
+                : "Please select an address to see your order summary."}
+            </div>
+          )}
+
         </>
       )}
     </div>
