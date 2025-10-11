@@ -1,37 +1,25 @@
 from django.urls import path
 from .views import (
-    MarkOrderDeliveredAPIView,
-    ShippedOrderForDeliveryAPIView,
+    DeliveryActionAPIView,
     DeliveryManRequestListCreateAPIView,
+    DeliveryManRequestRetrieveUpdateDestroyAPIView,
     DeliveryManProfileUpdateAPIView,
-    MarkOrderDeliveryFailedAPIView,
-    SendDeliveryOTPAPIView,
-    ResendDeliveryOTPAPIView,
-    VerifyDeliveryOTPAPIView,
-    DeliveryManRequestRetrieveUpdateDestroyAPIView
+    DeliveryDashboardAPIView,
+    DeliveryDetailAPIView,
 )
 
 urlpatterns = [
-    # Mark order as delivered (COD or online payment)
-    path("orders/<int:id>/mark-delivered/",MarkOrderDeliveredAPIView.as_view(),name="order-mark-delivered"),
-    path("orders/<int:order_id>/failed/", MarkOrderDeliveryFailedAPIView.as_view(), name="mark-order-failed"),
+    # ---------------- Orders / Delivery Actions ----------------
+    path("deliveryman/orders/action/", DeliveryActionAPIView.as_view(), name="delivery-action"),
 
-    # List shipped orders (for deliveryman or admin)
-    path("orders/shipped/",ShippedOrderForDeliveryAPIView.as_view(),name="shipped-orders"
-    ),
+    # ---------------- DeliveryMan Requests ----------------
+    path("request_for_deliveryman/", DeliveryManRequestListCreateAPIView.as_view(), name="deliveryman-request-list-create"),
+    path("request_for_deliveryman/<int:id>/", DeliveryManRequestRetrieveUpdateDestroyAPIView.as_view(), name="deliveryman-request-detail"),
 
-    # DeliveryMan Requests
-    path( "request_for_deliveryman/", DeliveryManRequestListCreateAPIView.as_view(), name="deliveryman-request-list-create"
-    ),
-    path(
-        "request_for_deliveryman/<int:id>/",
-        DeliveryManRequestRetrieveUpdateDestroyAPIView.as_view(),
-        name="deliveryman-request-detail",
-    ),
-    
+    # ---------------- DeliveryMan Profile ----------------
     path("deliveryman/profile/", DeliveryManProfileUpdateAPIView.as_view(), name="deliveryman-profile"),
-    
-    path('delivery/send-otp/<int:item_id>/', SendDeliveryOTPAPIView.as_view(), name='send-delivery-otp'),
-    path('delivery/resend-otp/', ResendDeliveryOTPAPIView.as_view(), name='resend-delivery-otp'),
-    path('delivery/verify-otp/', VerifyDeliveryOTPAPIView.as_view(), name='verify-delivery-otp'),
+
+    # ---------------- Dashboard / Detail ----------------
+    path("deliveryman/dashboard/", DeliveryDashboardAPIView.as_view(), name="delivery-dashboard"),
+    path("deliveryman/orders/", DeliveryDetailAPIView.as_view(), name="delivery-detail"),
 ]

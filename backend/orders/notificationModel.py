@@ -11,6 +11,17 @@ import requests  # for WhatsApp API or other external services
 User = get_user_model()
 
 
+NOTIFICATION_TITLES = {
+    "order_placed": "Order Placed ✅",
+    "order_shipped": "Order Shipped 🚚",
+    "out_for_delivery": "Out for Delivery 📦",
+    "delivered": "Delivered ✅",
+    "cancelled": "Order Cancelled ❌",
+    "return_requested": "Return Requested 🔄",
+    "replacement_requested": "Replacement Requested 🔁",
+    "otp_delivery": "Your OTP for Delivery 🔐",
+    "otp_return": "Your OTP for Pickup 🔐",
+}
 class Notification(models.Model):
 
     CHANNEL_CHOICES = [
@@ -66,7 +77,7 @@ class Notification(models.Model):
     # OTP fields (for otp_delivery event)
     otp_secret = models.CharField(max_length=32, blank=True, null=True)
     otp_verified = models.BooleanField(default=False)
-
+    otp_expires_at=models.DateTimeField(null=True,blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default="pending"
@@ -129,18 +140,22 @@ class Notification(models.Model):
         otp_code = totp.now()
 
         self.payload["otp"] = otp_code
+        self.otp_expires_at = timezone.now() + timezone.timedelta(seconds=ttl_seconds)  # <-- NEW
         if self.channel == "email":
             self.message = (
                 f"🔐 Your OTP is {otp_code}. It will expire in {ttl_seconds//60} minutes."
             )
-        self.save(update_fields=["payload", "message", "updated_at","otp_secret"])
+        self.save(update_fields=["payload", "message", "updated_at","otp_secret","otp_expires_at"])
         return otp_code
 
     def verify_otp(self, code, ttl_seconds=300):
         """Verify OTP using pyotp."""
         if self.event != "otp_delivery" or not self.otp_secret:
             return False
-
+        if self.otp_expires_at and self.otp_expires_at < timezone.now():
+            self.otp_verified = True  # mark expired as used
+            self.save(update_fields=["otp_verified", "updated_at"])
+            return False
         totp = pyotp.TOTP(self.otp_secret, interval=ttl_seconds)
         is_valid = totp.verify(str(code), valid_window=1)
 
@@ -154,10 +169,6 @@ class Notification(models.Model):
         try:
             if self.channel == "email":
                 self._send_email()
-            elif self.channel == "whatsapp":
-                self._send_whatsapp()
-            elif self.channel == "sms":
-                self._send_sms()
             else:
                 raise ValueError("Unsupported channel")
 
@@ -183,8 +194,8 @@ class Notification(models.Model):
         """
         Send email with HTML content and plain-text fallback.
         """
-        subject = f"Notification: {self.event.replace('_', ' ').title()}"
-        from_email = "noreply@yourdomain.com"
+        subject = NOTIFICATION_TITLES.get(self.event, "Notification")
+        from_email = settings.DEFAULT_FROM_EMAIL
         to_email = [self.user.email]
 
         # Render HTML message from template
@@ -200,27 +211,27 @@ class Notification(models.Model):
         email.attach_alternative(html_content, "text/html")
         email.send(fail_silently=False)
 
-    def _send_whatsapp(self):
-        """Send notification via WhatsApp API (example)."""
-        whatsapp_api_url = "https://api.whatsapp.com/send"
-        phone = self.get_phone_number()  # assuming User model has phone_number
-        if not phone:
-            raise ValueError("No phone number available to send notification")
-        payload = {
-            "to": phone,
-            "message": self.message,
-        }
-        # Replace this with actual WhatsApp API request
-        response = requests.post(whatsapp_api_url, json=payload, timeout=5)
-        if response.status_code != 200:
-            raise Exception(f"WhatsApp send failed: {response.text}")
+    # def _send_whatsapp(self):
+    #     """Send notification via WhatsApp API (example)."""
+    #     whatsapp_api_url = "https://api.whatsapp.com/send"
+    #     phone = self.get_phone_number()  # assuming User model has phone_number
+    #     if not phone:
+    #         raise ValueError("No phone number available to send notification")
+    #     payload = {
+    #         "to": phone,
+    #         "message": self.message,
+    #     }
+    #     # Replace this with actual WhatsApp API request
+    #     response = requests.post(whatsapp_api_url, json=payload, timeout=5)
+    #     if response.status_code != 200:
+    #         raise Exception(f"WhatsApp send failed: {response.text}")
 
-    def _send_sms(self):
-        """Send notification via SMS API (example)."""
-        sms_api_url = "https://api.smsprovider.com/send"
-        phone = self.user.phone_number
-        payload = {"to": phone, "message": self.message}
-        response = requests.post(sms_api_url, json=payload, timeout=5)
-        if response.status_code != 200:
-            raise Exception(f"SMS send failed: {response.text}")
+    # def _send_sms(self):
+    #     """Send notification via SMS API (example)."""
+    #     sms_api_url = "https://api.smsprovider.com/send"
+    #     phone = self.user.phone_number
+    #     payload = {"to": phone, "message": self.message}
+    #     response = requests.post(sms_api_url, json=payload, timeout=5)
+    #     if response.status_code != 200:
+    #         raise Exception(f"SMS send failed: {response.text}")
         

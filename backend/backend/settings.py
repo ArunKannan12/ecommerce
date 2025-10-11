@@ -58,9 +58,12 @@ INSTALLED_APPS = [
     'cloudinary',
     'cloudinary_storage',
     'django_extensions',
+    'anymail'
 
    
 ]
+
+
 CLOUDINARY_URL = env("CLOUDINARY_URL")
 
 
@@ -344,13 +347,18 @@ CSRF_HEADER_NAME = "X-CSRFToken"
 # Email settings based on environment
 if ENVIRONMENT == "production":
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-    EMAIL_HOST = "smtp.gmail.com"  # or your SMTP provider
+    EMAIL_HOST = "smtp-relay.brevo.com"
     EMAIL_PORT = 587
     EMAIL_USE_TLS = True
     EMAIL_USE_SSL = False
     EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
     EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-    DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
+    DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
+    ANYMAIL = {
+        "MAILGUN_API_KEY": os.getenv("MAILGUN_API_KEY"),
+        "MAILGUN_SENDER_DOMAIN": "sandbox8918026a05ee43068da17c71e906f261.mailgun.org",
+    }
+
 else:
     # Local / development - MailHog
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

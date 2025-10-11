@@ -27,7 +27,7 @@ const OrderList = () => {
         const data = res.data.results || [];
 
         setOrders(data);
-        console.log(data);
+
         
       } catch (error) {
         console.error("Failed to fetch orders:", error);

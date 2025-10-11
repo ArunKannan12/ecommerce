@@ -33,9 +33,13 @@ const OrderSummary = ({
         </div>
 
         {/* Payment Status Info Box */}
-        <div className={`mt-4 p-4 rounded-lg text-center text-sm sm:text-base
-          ${order.is_paid ? "bg-green-50 border border-green-200 text-green-800" : "bg-yellow-50 border border-yellow-200 text-yellow-800"}`}>
-          {order.is_paid ? (
+        <div
+          className={`mt-4 p-4 rounded-lg text-center text-sm sm:text-base
+          ${order.is_paid ? "bg-green-50 border border-green-200 text-green-800" : "bg-yellow-50 border border-yellow-200 text-yellow-800"}`}
+        >
+          {order.status === "cancelled" ? (
+            <>This order has been cancelled.</>
+          ) : order.is_paid ? (
             <>
               Payment of <strong>₹{total}</strong> received via <strong>{order.payment_method}</strong> on <strong>{paidDate}</strong>.
             </>
@@ -56,6 +60,7 @@ const OrderSummary = ({
             </>
           )}
         </div>
+
 
       </div>
 

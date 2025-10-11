@@ -32,7 +32,7 @@ const ProductDetail = () => {
         const res = await axiosInstance.get(`products/${productSlug}/`);
         const data = res.data;
         setProduct(data);
-        console.log(data);
+       
         
         if (data.variants?.length > 0) setSelectedVariant(data.variants[0]);
 
@@ -60,20 +60,24 @@ const ProductDetail = () => {
   };
 
   useEffect(() => {
-  if (!selectedVariant) return;
-
+  if (!selectedVariant?.id) return;
   if (!isAuthenticated) {
-    // 🔹 Guest user (localStorage cart)
     const cart = JSON.parse(localStorage.getItem("cart")) || [];
-    setInCart(cart.some(item => item.product_variant_id === selectedVariant.id));
+    const found = cart.some(item => {
+      return item.variant_id == selectedVariant.id;
+    });
+    setInCart(found);
   } else {
-    // 🔹 Logged-in user (API cart)
     refetchCart().then((res) => {
-      const items = res?.data?.items || [];
-      setInCart(items.some(item => item.product_variant === selectedVariant.id));
+      const items = res?.data || []; // assuming res.data is the array directly
+      const found = items.some(item => {
+        return item.variant_id == selectedVariant.id;
+      });
+      setInCart(found);
     });
   }
 }, [selectedVariant, isAuthenticated, refetchCart]);
+  
 
   // Guest cart helper (localStorage)
   const addToLocalCart = (variantId, quantity) => {

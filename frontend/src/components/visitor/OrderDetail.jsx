@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import axiosInstance from "../../api/axiosinstance";
@@ -7,7 +7,6 @@ import OrderDetailShimmer from "../../shimmer/OrderDetailShimmer";
 import OrderTracker from "./orderDetail/OrderTracker";
 import OrderItemsList from "./orderDetail/OrderItemsList";
 import OrderSummary from "./orderDetail/OrderSummary";
-import ReturnsReplacements from "./orderDetail/ReturnReplacements";
 import ShippingInfo from "./orderDetail/ShippingInfo";
 
 const OrderDetail = () => {
@@ -151,16 +150,15 @@ const OrderDetail = () => {
         </div>
 
         {/* Shipping Info */}
-        <ShippingInfo address={order.shipping_address} />
+        <ShippingInfo address={order.shipping_address} orderNumber={order.id}/>
 
         {/* Order Items */}
-        <OrderItemsList items={order.items} />
+        <OrderItemsList items={order.items}  orderNumber={order.order_number} orders={order}/>
 
         {/* Order Summary */}
         <OrderSummary 
         order={order} 
         fetchOrder={fetchOrder} 
-        canceling={paying}
         cancelLoading={cancelLoading}
         onTriggerCancelModal={()=>setShowCancelModal(true)} 
         onPayNow={handlePayNow}
@@ -191,13 +189,8 @@ const OrderDetail = () => {
                 cancelled_by_role: order.cancelled_by?.role || "User",
               }
             }
-            return_request={order.return_request?.[0]}
-            replacement_request={order.replacement_request?.[0]}
           />
         </div>
-
-        {/* Returns & Replacements */}
-        <ReturnsReplacements order={order} navigate={navigate} />
 
         {showCancelModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">

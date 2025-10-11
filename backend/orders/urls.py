@@ -66,17 +66,17 @@ urlpatterns = [
     path("returns/create/", ReturnRequestCreateAPIView.as_view(), name="return-create"),
 
     # Admin (or staff) updates return status (approve/reject/refunded etc.)
-    path("returns/<int:pk>/update/", ReturnRequestUpdateAPIView.as_view(), name="return-update"),
+    path("returns/<int:returnId>/update/", ReturnRequestUpdateAPIView.as_view(), name="return-update"),
 
     # List of return requests (customer → their own, admin → all)
     path("returns/", ReturnRequestListAPIView.as_view(), name="return-list"),
 
     # Details of a single return request
     # urls.py
-    path("returns/<int:pk>/", ReturnRequestDetailAPIView.as_view()),
-    path("refund-status/<int:order_number>/", RefundStatusAPIView.as_view(), name="refund-status"),
+    path("returns/<int:returnId>/", ReturnRequestDetailAPIView.as_view()),
+    path("refund-status/<str:order_number>/", RefundStatusAPIView.as_view(), name="refund-status"),
 
-    path("cod-refund/confirm/<int:order_id>/", ConfirmCODRefundAPIView.as_view(), name="confirm-cod-refund"),
+    path("cod-refund/confirm/<str:order_number>/", ConfirmCODRefundAPIView.as_view(), name="confirm-cod-refund"),
 
     # replacements/ endpoints should use plural like returns/
     path("replacements/create/", ReplacementRequestCreateAPIView.as_view(), name="replacement-create"),

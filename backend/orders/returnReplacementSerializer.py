@@ -41,9 +41,8 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
         choices=ReturnRequest.REFUND_METHOD_CHOICES,
         required=False
     )
-    order_number = serializers.PrimaryKeyRelatedField(
-        queryset=Order.objects.all(), write_only=True
-    )
+    order_number = serializers.CharField( write_only=True)
+    
     order_item_id = serializers.PrimaryKeyRelatedField(
         queryset=OrderItem.objects.all(), write_only=True
     )
@@ -57,6 +56,7 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             "order_number", "order_item_id",
             # request info
             "reason", "status",
+            'order_number_display',
             # refund info
             "refund_amount", "user_upi", "refund_method", "refund_method_display",
             # pickup / warehouse / admin
@@ -89,47 +89,51 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
 
         if self.instance is None:  # Only on create
-            order = attrs.get("order_number")
+            order_number = attrs.get("order_number")
             order_item = attrs.get("order_item_id")
+            
+            if not order_number or not order_item:
+                raise serializers.ValidationError("Both 'order_number' and 'order_item_id' are required.")
 
-            if not order or not order_item:
-                raise serializers.ValidationError("Both 'order_id' and 'order_item_id' are required.")
+            # Fetch the actual Order instance
+            try:
+                order = Order.objects.get(order_number=order_number)
+            except Order.DoesNotExist:
+                raise serializers.ValidationError({"order_number": "Order not found."})
 
-            if ReplacementRequest.objects.filter(
-                order_item=order_item.id
-            ).exclude(status__in=["delivered", "failed", "rejected"]).exists():
-                raise serializers.ValidationError(
-                    "A replacement request already exists for this item, cannot create return request."
-                )
-            if ReturnRequest.objects.filter(
-                order_item=order_item.id
-            ).exclude(status='refunded').exists():
-                raise serializers.ValidationError("A return request is already in progress for this item")
-            # Must belong to current user
+            # Validate that the order_item belongs to the order
+            if order_item.order != order:
+                raise serializers.ValidationError({"order_item_id": "Order item not found for this order."})
+
+            # Now it's safe to check
             if order.user != user:
                 raise serializers.ValidationError("You can only request a return for your own orders.")
 
-            # Only delivered orders allowed
             if order.status.lower() != "delivered":
                 raise serializers.ValidationError("Return requests can only be created for delivered orders.")
 
-            # Product policy checks
             variant = order_item.product_variant
             if not variant.allow_return:
                 raise serializers.ValidationError("This product is not eligible for return.")
 
-            # --- COD refund method validation ---
+            # COD UPI check
             if order.payment_method.lower() in ["cod", "cash on delivery"]:
                 user_upi = attrs.get("user_upi", "").strip()
                 if not user_upi:
                     raise serializers.ValidationError("For COD return requests, UPI address is required for refund.")
 
+            # Replace string/ids with actual objects for use in create()
+            attrs["order"] = order
+            attrs["order_item"] = order_item
+
         return attrs
 
     # --- Creation ---
     def create(self, validated_data):
-        order = validated_data.pop("order_number")
-        order_item = validated_data.pop("order_item_id")
+        order = validated_data.pop("order")       # <-- already an Order instance
+        order_item = validated_data.pop("order_item")  # <-- already an OrderItem instance
+        validated_data.pop('order_number',None)
+        validated_data.pop('order_item_id',None)
 
         user_upi = validated_data.pop("user_upi", "").strip()
         refund_method = validated_data.pop("refund_method", None)
@@ -150,7 +154,6 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
                 (order_item.price * order_item.quantity / total_items_price) * order.delivery_charge
             )
         refund_amount = (order_item.price * order_item.quantity) + item_share_of_delivery
-
         instance = ReturnRequest.objects.create(
             order=order,
             order_item=order_item,
@@ -160,6 +163,7 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             **validated_data
         )
         return instance
+
     # --- Custom Getters for new fields ---
     def get_pickup_collected_at(self, obj):
         if obj.pickup_verified_by and hasattr(obj.pickup_verified_by, "collected_at"):
@@ -229,19 +233,23 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
     def get_refund_method_display(self, obj):
         return obj.get_refund_method_display() if obj.refund_method else None
 
+        # --- Custom Getters ---
     def get_pickup_verified_by_name(self, obj):
-        if obj.pickup_verified_by and obj.pickup_verified_by.user:
-            return obj.pickup_verified_by.user.get_full_name() or obj.pickup_verified_by.user.email
+        # Safely return the full name or email of the user who verified pickup
+        if obj.pickup_verified_by and getattr(obj.pickup_verified_by, "user", None):
+            user = obj.pickup_verified_by.user
+            return user.get_full_name() or user.email
         return None
 
     def get_pickup_status_display(self, obj):
-        return obj.get_pickup_status_display()
+        return obj.get_pickup_status_display() if hasattr(obj, "get_pickup_status_display") else None
 
     def get_warehouse_status_display(self, obj):
-        return obj.get_warehouse_decision_display()
+        return obj.get_warehouse_decision_display() if hasattr(obj, "get_warehouse_decision_display") else None
 
     def get_admin_status_display(self, obj):
-        return obj.get_admin_decision_display()
+        return obj.get_admin_decision_display() if hasattr(obj, "get_admin_decision_display") else None
+
 
 class ReplacementRequestSerializer(serializers.ModelSerializer):
     order = OrderLightSerializer(read_only=True)

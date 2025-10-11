@@ -15,6 +15,7 @@ const AdminDeliveryMan = lazy(()=>import ('../components/admin/pages/AdminDelive
 const AdminAllDeliveryman = lazy(()=>import('../components/admin/pages/AllDeliveryMan.jsx'))
 const AdminDeliveryTracking = lazy(()=>import('../components/admin/pages/DeliveryTracking.jsx'))
 const AdminAllBanner = lazy(()=>import('../components/admin/pages/AdminAllBanner.jsx'))
+
 // 🔄 Lazy-loaded components
 const VisitorHomePage = lazy(() => import("../components/visitor/VisitorHomePage"));
 const Home = lazy(() => import("../components/visitor/Home"));
@@ -40,6 +41,16 @@ const VerifyEmail = lazy(() => import("../components/visitor/VerifyEmail"));
 const FacebookAuth = lazy(() => import("../components/visitor/FacebookAuth"));
 const GoogleAuth = lazy(() => import("../components/visitor/GoogleAuth"));
 const AdminDashboardHome = lazy(()=>import('../components/admin/pages/AdminDashboardHome.jsx'))
+const ReturnList = lazy(()=>import('../components/visitor/returnReplacement/ReturnList.jsx'))
+const ReplacementList = lazy(()=>import('../components/visitor/returnReplacement/ReplacementList.jsx'))
+
+const WarehouseDashboardHome = lazy(()=>import("../components/warehousestaff/pages/WarehouseDashboardHome.jsx")) ;
+const WarehouseOrders = lazy(()=>import("../components/warehousestaff/pages/WarehouseOrders.jsx"));
+const OrderAssigning = lazy(()=> import ("../components/warehousestaff/pages/OrderAssigning.jsx"))
+const WarehouseReturns = lazy(()=>import('../components/warehousestaff/pages/WarehouseReturns.jsx'));
+const OrdersToDeliver =lazy(()=>import ("../components/deliveryman/pages/OrdersToDeliver.jsx")) ;
+
+const DeliveryManDashboardHome = lazy(()=>import('../components/deliveryman/pages/DeliveryManDashboardHome.jsx'))
 // 🌀 Suspense wrapper
 const withSuspense = (Component) => (
   <Suspense fallback={<LoadingScreen />}>{Component}</Suspense>
@@ -65,13 +76,13 @@ export const router = createBrowserRouter([
     element: withSuspense(<RedirectHome/>),
     children: [
       { index: true, element: withSuspense(<Home />) },
-      { path: "store/", element: withSuspense(<Store />) },
-      { path: "store/:categorySlug/", element: withSuspense(<Store />) },
-      { path: "products/:productSlug/", element: withSuspense(<ProductDetail />) },
-      { path: "cart/", element: withSuspense(<Cart />) },
-      { path: "login/", element: withSuspense(<LoginAndSignup />) },
-      { path: "about/", element: withSuspense(<About />) },
-      { path: "forgot-password/", element: withSuspense(<ForgotPassword />) },
+      { path: "store", element: withSuspense(<Store />) },
+      { path: "store/:categorySlug", element: withSuspense(<Store />) },
+      { path: "products/:productSlug", element: withSuspense(<ProductDetail />) },
+      { path: "cart", element: withSuspense(<Cart />) },
+      { path: "login", element: withSuspense(<LoginAndSignup />) },
+      { path: "about", element: withSuspense(<About />) },
+      { path: "forgot-password", element: withSuspense(<ForgotPassword />) },
       { path: "/reset-password-confirm/:uid/:token", element: withSuspense(<ConfirmResetPassword />) },
       { path: "/activation/:uid/:token", element: withSuspense(<ActivateAccount />) },
       { path: "/verify-email", element: withSuspense(<VerifyEmail />) },
@@ -89,12 +100,14 @@ export const router = createBrowserRouter([
           children: [
             { path: "/profile", element: withSuspense(<Profile />) },
             { path: "/change-password", element: withSuspense(<ChangePassword />) },
-            { path: "checkout/", element: withSuspense(<Checkout />) },
-            { path: "orders/", element: withSuspense(<OrderList />) },
-            { path: "orders/:order_number/", element: withSuspense(<OrderDetail />) },
-            { path: "returns/create/:orderId", element: withSuspense(<ReturnRequest />) },
-            { path: "returns/:returnId", element: withSuspense(<ReturnRequest />) },
-            { path: "replacements/create/:orderId", element: withSuspense(<ReplacementRequest />) },
+            { path: "/checkout", element: withSuspense(<Checkout />) },
+            { path: "/orders/", element: withSuspense(<OrderList />) },
+            { path: "/orders/:order_number", element: withSuspense(<OrderDetail />) },
+            { path: "/returns", element: withSuspense(<ReturnList />) },
+            { path: "replacements", element: withSuspense(<ReplacementList />) },
+            { path: "/returns/create/:orderNumber", element: withSuspense(<ReturnRequest />) },
+            { path: "/returns/:returnId", element: withSuspense(<ReturnRequest />) },
+            { path: "/replacements/create/:orderNumber", element: withSuspense(<ReplacementRequest />) },
           ],
         },
       ],
@@ -131,11 +144,23 @@ export const router = createBrowserRouter([
 
   // Warehouse routes
   {
-    element: <ProtectedRoutes allowedRoles={["warehouse"]} />,
+   element: <ProtectedRoutes allowedRoles={["warehouse"]} />,
     children: [
-      { path: "/warehouse", element: withSuspense(<WarehouseDashboard />) },
-      { path: "/profile", element: withSuspense(<Profile />) },
-      { path: "/change-password", element: withSuspense(<ChangePassword />) },
+      {
+        path: "/warehouse",
+        element: withSuspense(<WarehouseDashboard />), // Sidebar + Outlet
+        children: [
+          
+          { index: true, element: <Navigate to="/warehouse/dashboard" replace /> },
+
+          // Warehouse dashboard stats page
+          { path: "dashboard", element: withSuspense(<WarehouseDashboardHome />) },
+          { path: "orders", element: withSuspense(<WarehouseOrders/>) },
+          { path: "order-assigning", element: withSuspense(<OrderAssigning/>) },
+          { path: "returns", element: withSuspense(<WarehouseReturns/>) },
+
+        ]
+      },
     ],
   },
 
@@ -143,7 +168,14 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoutes allowedRoles={["deliveryman"]} />,
     children: [
-      { path: "/delivery", element: withSuspense(<DeliveryManDashboard />) },
+      { path: "/delivery", 
+        element: withSuspense(<DeliveryManDashboard />),
+        children:[
+          {index:true,element:<Navigate to="dashboard" replace/>},
+          {path:'dashboard',element:withSuspense(<DeliveryManDashboardHome/>)},
+          {path:'orders-to-deliver',element:withSuspense(<OrdersToDeliver/>)},
+        ]
+       },
       { path: "/profile", element: withSuspense(<Profile />) },
       { path: "/change-password", element: withSuspense(<ChangePassword />) },
     ],

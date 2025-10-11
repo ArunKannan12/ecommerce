@@ -31,42 +31,51 @@ const ReturnsReplacements = ({ order, navigate }) => {
                 <div key={item.id} className="flex flex-col gap-2">
                 {itemReturnRequest ? (
                     <button
-                    onClick={() => navigate(`/returns/${itemReturnRequest.id}`)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
+                        onClick={() => {
+                        console.log("Navigating to existing return request:", itemReturnRequest.id);
+                        navigate(`/returns/${itemReturnRequest.id}`);
+                        }}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
                     >
-                    View Return Request
+                        View Return Request
                     </button>
-                ) : itemReplacementRequest ? (
+                    ) : itemReplacementRequest ? (
                     <button
-                    onClick={() => navigate(`/replacements/${itemReplacementRequest.id}`)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+                        onClick={() => {
+                        console.log("Navigating to existing replacement request:", itemReplacementRequest.id);
+                        navigate(`/replacements/${itemReplacementRequest.id}`);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
                     >
-                    View Replacement Request
+                        View Replacement Request
                     </button>
-                ) : (
+                    ) : (
                     <>
-                    {returnEligible && (
+                        {returnEligible && (
                         <button
-                        onClick={() =>
-                            navigate(`/returns/create/${order.id}?item=${item.id}`)
-                        }
-                        className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition"
+                            onClick={() => {
+                            console.log("Requesting return for order:", order?.id, "item:", item?.id);
+                            navigate(`/returns/create/${order?.id}?item=${item?.id}`);
+                            }}
+                            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition"
                         >
-                        Request Return
+                            Request Return
                         </button>
-                    )}
-                    {replacementEligible && (
+                        )}
+                        {replacementEligible && (
                         <button
-                        onClick={() =>
-                            navigate(`/replacements/create/${order.id}?item=${item.id}`)
-                        }
-                        className="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition"
+                            onClick={() => {
+                            console.log("Requesting replacement for order:", order?.id, "item:", item?.id);
+                            navigate(`/replacements/create/${order?.id}?item=${item?.id}`);
+                            }}
+                            className="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition"
                         >
-                        Request Replacement
+                            Request Replacement
                         </button>
-                    )}
+                        )}
                     </>
-                )}
+                    )}
+
                 </div>
             );
             })}

@@ -300,7 +300,7 @@ const Checkout = () => {
       }
 
     } catch (error) {
-      console.error(error.response?.data || error);
+      console.error(error);
       toast.error(error.response?.data?.detail || "Failed to place order");
     }
   };

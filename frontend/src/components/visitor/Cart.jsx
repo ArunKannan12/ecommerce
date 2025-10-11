@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState,useRef } from "react";
 import { toast } from "react-toastify";
 import axiosInstance from "../../api/axiosinstance";
 import {
@@ -14,10 +14,13 @@ import ConfirmModal from "../helpers/ConfirmModal";
 const Cart = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const updateTimeoutsRef = useRef({});
 
   const [guestCartItems, setGuestCartItems] = useState([]);
   const [guestLoading, setGuestLoading] = useState(false);
 
+  const [loadingIds, setLoadingIds] = useState([]); // array of item IDs currently updating
+  
   const { data: authCartData, isLoading: authLoading, refetch: refetchCart } =
     useGetCartQuery(undefined, { skip: !isAuthenticated });
 
@@ -93,26 +96,50 @@ const Cart = () => {
   const handleUpdateQuantity = (itemId, newQty) => {
     if (newQty < 1) return;
 
-    if (isAuthenticated) {
-      const cartItem = cartItems.find((i) => i.id === itemId);
-      if (!cartItem) return;
+    // Track loading for this item
+    setLoadingIds((prev) => [...prev, itemId]);
 
-      updateCartItem({ id: cartItem.id, quantity: newQty }).catch(() => {
-        toast.error("Failed to update quantity");
-        refetchCart();
-      });
-    } else {
+    // Update guest cart UI immediately
+    if (!isAuthenticated) {
       const updated = guestCartItems.map((item) =>
         item.id === itemId ? { ...item, quantity: newQty } : item
       );
-      localStorage.setItem(
-        "cart",
-        JSON.stringify(updated.map((i) => ({ product_variant_id: i.id, quantity: i.quantity })))
-      );
       setGuestCartItems(updated);
-      window.dispatchEvent(new Event("cartUpdated"));
     }
+
+    // Update API after a short delay (optional debounce)
+    if (updateTimeoutsRef.current[itemId]) clearTimeout(updateTimeoutsRef.current[itemId]);
+
+    updateTimeoutsRef.current[itemId] = setTimeout(async () => {
+      try {
+        if (isAuthenticated) {
+          const cartItem = cartItems.find((i) => i.id === itemId);
+          if (!cartItem) return;
+
+          await updateCartItem({ id: cartItem.id, quantity: newQty }).unwrap();
+          refetchCart();
+        } else {
+          // Persist guest cart
+          const updated = guestCartItems.map((item) =>
+            item.id === itemId ? { ...item, quantity: newQty } : item
+          );
+          localStorage.setItem(
+            "cart",
+            JSON.stringify(updated.map((i) => ({ product_variant_id: i.id, quantity: i.quantity })))
+          );
+          setGuestCartItems(updated);
+          window.dispatchEvent(new Event("cartUpdated"));
+        }
+      } catch {
+        toast.error("Failed to update quantity");
+        if (isAuthenticated) refetchCart();
+      } finally {
+        // Remove loading state
+        setLoadingIds((prev) => prev.filter((id) => id !== itemId));
+      }
+    }, 700); // 700ms delay for debounce
   };
+
 
   // Delete confirmation
   const confirmRemoveItem = (item) => {
@@ -184,10 +211,13 @@ const Cart = () => {
 
               {/* Product Info */}
               <div className="space-y-2">
-                <h2 onClick={() => navigate(`/products/${item.product_slug || item.id}`)} className="ext-lg sm:text-xl font-semibold text-gray-900 capitalize truncate cursor-pointer">
+               <h2
+                  onClick={() => navigate(`/products/${item.product_slug || item.id}`)}
+                  className="text-lg sm:text-xl font-semibold text-gray-900 capitalize truncate cursor-pointer max-w-[200px] md:max-w-[300px]"
+                  title={`${item.product_name} - ${item.variant_name || "Default"}`}
+                >
                   {item.product_name} - {item.variant_name || "Default"}
                 </h2>
-
                 <div className="flex flex-wrap items-center gap-3">
                   {item.offer_price && parseFloat(item.offer_price) < parseFloat(item.base_price) ? (
                     <>
@@ -216,20 +246,20 @@ const Cart = () => {
                 <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
                   <button
                     onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                    disabled={item.quantity <= 1}
+                    disabled={item.quantity <= 1 || loadingIds.includes(item.id)}
                     className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
                   >
-                    −
+                    {loadingIds.includes(item.id) ? "..." : "−"}
                   </button>
                   <span className="font-medium text-gray-800 transition-transform duration-150 ease-in-out scale-105">
                     {item.quantity}
                   </span>
                   <button
                     onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                    disabled={item.quantity >= item.stock}
+                    disabled={item.quantity >= item.stock || loadingIds.includes(item.id)}
                     className="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 transition text-lg"
                   >
-                    +
+                    {loadingIds.includes(item.id) ? "..." : "+"}
                   </button>
                 </div>
 

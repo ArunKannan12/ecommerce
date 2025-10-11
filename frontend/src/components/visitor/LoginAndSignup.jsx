@@ -220,7 +220,7 @@ const LoginAndSignup = () => {
       </div>
 
       {/* Right Section */}
-      <div className="flex items-center justify-center px-4 py-8">
+      <div className="flex items-start lg:items-center justify-center px-4 py-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -269,7 +269,7 @@ const LoginAndSignup = () => {
                 <div className="relative">
                   <FaLock className="absolute left-3 top-3 text-gray-400" />
                   <input
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword.password ? "text" : "password"}
                     name="password"
                     value={loginData.password}
                     onChange={handleLoginChange}
@@ -279,10 +279,10 @@ const LoginAndSignup = () => {
                     }`}
                   />
                   <span
-                    onClick={togglePassword}
+                    onClick={()=>togglePassword('password')}
                     className="absolute right-3 top-3 text-gray-500 cursor-pointer"
                   >
-                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                    {showPassword.password ? <FaEyeSlash /> : <FaEye />}
                   </span>
                   {loginErrors.password && (
                     <p className="text-sm text-red-500 mt-1">{loginErrors.password}</p>

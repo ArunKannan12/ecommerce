@@ -98,27 +98,47 @@ const Profile = () => {
             </span>
           )}
         </div>
-
-        <p className="text-xs text-gray-400 mt-1 italic">
-          Signed in via {user.auth_provider}
-        </p>
       </div>
 
       {/* ✅ Quick Actions Row (Desktop + Mobile) */}
-      <div className="flex flex-col md:flex-row items-center justify-center gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6">
+        {/* Orders */}
         <Link
           to="/orders"
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg shadow hover:bg-gray-200 transition w-full md:w-auto justify-center"
+          className="flex flex-col items-center justify-center p-3 bg-gray-100 rounded-lg shadow hover:bg-gray-200 transition"
         >
-          <Package size={18} /> My Orders
+          <Package size={24} className="mb-1" />
+          <span className="text-xs font-medium text-center">Orders</span>
         </Link>
+
+        {/* Returns */}
+        <Link
+          to="/returns"
+          className="flex flex-col items-center justify-center p-3 bg-gray-100 rounded-lg shadow hover:bg-gray-200 transition"
+        >
+          <Package size={24} className="mb-1" />
+          <span className="text-xs font-medium text-center">Returns</span>
+        </Link>
+
+        {/* Replacements */}
+        <Link
+          to="/replacements"
+          className="flex flex-col items-center justify-center p-3 bg-gray-100 rounded-lg shadow hover:bg-gray-200 transition"
+        >
+          <Package size={24} className="mb-1" />
+          <span className="text-xs font-medium text-center">Replacements</span>
+        </Link>
+
+        {/* Logout */}
         <button
           onClick={logout}
-          className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg shadow hover:bg-red-600 transition w-full md:w-auto justify-center"
+          className="col-span-2 sm:col-span-3 flex items-center justify-center gap-2 p-3 bg-red-500 text-white rounded-lg shadow hover:bg-red-600 transition"
         >
-          <LogOut size={18} /> Logout
+          <LogOut size={18} />
+          <span className="text-xs font-medium">Logout</span>
         </button>
       </div>
+
 
       {/* Info Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-gray-700">

@@ -1,4 +1,4 @@
-from .models import Order, OrderItem, ShippingAddress
+from .models import Order, OrderItem, ShippingAddress,ReturnRequest,ReplacementRequest
 from rest_framework import serializers
 from products.serializers import ProductVariantSerializer
 from products.models import ProductVariant
@@ -57,7 +57,7 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-             'order_number','shipping_address', 'shipping_address_id',
+             'id','order_number','shipping_address', 'shipping_address_id',
             'status', 'subtotal', 'delivery_charge', 'total',
             'payment_method', 'is_paid', 'is_refunded',
             'tracking_number', 'shipped_at', 'delivered_at', 'paid_at',
@@ -208,23 +208,21 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     items = serializers.SerializerMethodField()
     cancelable = serializers.SerializerMethodField()
     cancelled_by = serializers.StringRelatedField(read_only=True)
-    refund_info=serializers.SerializerMethodField()
-    return_request = serializers.SerializerMethodField()
-    replacement_request = serializers.SerializerMethodField(read_only=True)
+    refund_info = serializers.SerializerMethodField()
     delivered_by = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = [
-            'order_number', 'shipping_address', 'status',
+            'id', 'order_number', 'shipping_address', 'status',
             'subtotal', 'delivery_charge', 'total',
-            'payment_method', 'is_paid', 'is_refunded', 'is_restocked',  # 👈 added here
+            'payment_method', 'is_paid', 'is_refunded', 'is_restocked',
             'tracking_number', 'shipped_at', 'delivered_at', 'paid_at',
             'created_at', 'updated_at', 'promoter', 'items',
             'cancel_reason', 'cancelled_at', 'cancelled_by',
             'razorpay_order_id', 'razorpay_payment_id',
             'refund_id', 'refund_status', 'refunded_at', 'refund_finalized',
-            'cancelable', 'refund_info', 'return_request','replacement_request','delivered_by'
+            'cancelable', 'refund_info', 'delivered_by'
         ]
 
     def get_cancelable(self, obj):
@@ -233,7 +231,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     def get_refund_info(self, obj):
         if not obj.refund_id:
             return None
-        
+
         if obj.refund_status in ["processed", "refunded"]:
             message = "Refund Processed – may take 5–7 days to reflect in your account."
         elif obj.refund_status == "failed":
@@ -249,54 +247,29 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             "message": message,
         }
 
-    def get_return_request(self, obj):
-        rr = obj.return_requests.first()  # first() directly returns the model instance or None
-        if not rr:
-            return []
-        return [{
-            "id": rr.id,
-            "status": rr.status,
-            "reason": rr.reason,
-            "pickup_status": rr.pickup_status,
-            "admin_decision": rr.admin_decision,
-            "warehouse_decision": rr.warehouse_decision,
-            "refund_amount": rr.refund_amount,
-            "refund_method": rr.refund_method,
-        }]
-
-    def get_replacement_request(self, obj):
-        rr = obj.replacement_requests.first()
-        if not rr:
-            return []
-        return [{
-            "id": rr.id,
-            "status": rr.status,
-            "reason": rr.reason,
-            "pickup_status": rr.pickup_status,
-            "admin_decision": rr.admin_decision,
-            "warehouse_decision": rr.warehouse_decision,
-            "shipped_at": rr.shipped_at,
-            "delivered_at": rr.delivered_at,
-        }]
-
-    def get_delivered_by(self, obj):   # 👈 method field implementation
+    def get_delivered_by(self, obj):
         if not obj.delivered_by:
             return None
         dm = obj.delivered_by
         return {
             "id": dm.id,
-            "name": str(dm.user),  # will call __str__ of User
+            "name": str(dm.user),
             "phone": dm.phone,
             "vehicle_number": dm.vehicle_number,
             "last_active": dm.last_active,
             "joined_at": dm.joined_at,
-            "total_delivery":dm.total_deliveries,
-            "earnings":dm.earnings
+            "total_delivery": dm.total_deliveries,
+            "earnings": dm.earnings
         }
-    
+
     def get_items(self, obj):
         result = []
         delivered_at = obj.delivered_at
+
+        # prefetch requests
+        return_requests = {rr.order_item_id: rr for rr in obj.return_requests.all()}
+        replacement_requests = {rr.order_item_id: rr for rr in obj.replacement_requests.all()}
+
         for item in obj.orderitem_set.all():
             variant = item.product_variant
             return_remaining_days = None
@@ -310,12 +283,43 @@ class OrderDetailSerializer(serializers.ModelSerializer):
                     delta = (delivered_at + timedelta(days=variant.replacement_days)) - timezone.now()
                     replacement_remaining_days = max(delta.days, 0)
 
+            # attach return/replacement request if exists
+            return_request = None
+            replacement_request = None
+            if item.id in return_requests:
+                rr = return_requests[item.id]
+                return_request = {
+                    "id": rr.id,
+                    "status": rr.status,
+                    "reason": rr.reason,
+                    "pickup_status": rr.pickup_status,
+                    "admin_decision": rr.admin_decision,
+                    "warehouse_decision": rr.warehouse_decision,
+                    "refund_amount": rr.refund_amount,
+                    "refund_method": rr.refund_method,
+                }
+            if item.id in replacement_requests:
+                rr = replacement_requests[item.id]
+                replacement_request = {
+                    "id": rr.id,
+                    "status": rr.status,
+                    "reason": rr.reason,
+                    "pickup_status": rr.pickup_status,
+                    "admin_decision": rr.admin_decision,
+                    "warehouse_decision": rr.warehouse_decision,
+                    "shipped_at": rr.shipped_at,
+                    "delivered_at": rr.delivered_at,
+                }
+
             result.append({
                 **OrderItemSimpleSerializer(item).data,
                 "return_remaining_days": return_remaining_days,
                 "replacement_remaining_days": replacement_remaining_days,
+                "return_request": return_request,
+                "replacement_request": replacement_request,
             })
         return result
+
     
 class OrderSummarySerializer(serializers.ModelSerializer):
     shipping_address = ShippingAddressSummarySerializer(read_only=True)
@@ -407,13 +411,13 @@ class OrderLightSerializer(serializers.ModelSerializer):
         fields = ['order_number','status','total','payment_method','created_at','is_paid','paid_at']
 
 class OrderitemLightSerializer(serializers.ModelSerializer):
-    product_variant=ProductVariantSerializer(read_only=True)
-
+    product_variant = ProductVariantSerializer(read_only=True)
     class Meta:
-        model=OrderItem
-        fields=['id','quantity','price','status','product_variant']
-
-
+        model = OrderItem
+        fields = [
+            'id', 'quantity', 'price', 'status',
+            'product_variant'
+        ]
 
 class WarehouseOrderItemSerializer(serializers.ModelSerializer):
     order_number = serializers.SerializerMethodField()

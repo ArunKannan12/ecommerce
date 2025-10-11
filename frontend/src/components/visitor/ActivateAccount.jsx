@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Spinner } from "react-bootstrap";
 import axiosInstance from "../../api/axiosinstance";
+import LoadingScreen from "../helpers/LoadinScreen";
 
 const ActivateAccount = () => {
   const { uid, token } = useParams();
@@ -51,9 +51,7 @@ const ActivateAccount = () => {
       className="d-flex justify-content-center align-items-center"
       style={{ minHeight: '100vh' }}
     >
-      <Spinner animation="border" role="status" variant="primary" style={{ width: '3rem', height: '3rem' }}>
-        <span className="visually-hidden">Loading...</span>
-      </Spinner>
+      <LoadingScreen/>
     </div>
   );
 };

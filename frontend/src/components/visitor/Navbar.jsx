@@ -107,11 +107,14 @@ const Navbar = () => {
               </button>
 
               <div
-                className={`absolute right-0 mt-2 w-44 bg-white border rounded-md shadow-xl z-50 transform origin-top-right transition-all duration-300 ease-out
+                className={`absolute right-0 mt-2 w-48 bg-white border rounded-md shadow-xl z-50 transform origin-top-right transition-all duration-300 ease-out
                   ${accountOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}
               >
                 <Link to="/profile" className="block px-4 py-2 hover:bg-gray-100" onClick={() => setAccountOpen(false)}>Profile</Link>
-                <Link to="/orders" className="block px-4 py-2 hover:bg-gray-100" onClick={() => setAccountOpen(false)}>Orders</Link>
+                <Link to="/orders" className="block px-4 py-2 hover:bg-gray-100" onClick={() => setAccountOpen(false)}>My Orders</Link>
+                <Link to="/returns" className="block px-4 py-2 hover:bg-gray-100" onClick={() => setAccountOpen(false)}>My Returns</Link>
+                <Link to="/replacements" className="block px-4 py-2 hover:bg-gray-100" onClick={() => setAccountOpen(false)}>My Replacements</Link>
+                <Link to="/wallet" className="block px-4 py-2 hover:bg-gray-100" onClick={() => setAccountOpen(false)}>Wallet</Link>
                 <button
                   onClick={() => {
                     logout();
@@ -126,6 +129,7 @@ const Navbar = () => {
           ) : (
             <Link to="/login" className="hover:text-blue-600 transition-colors">Login</Link>
           )}
+
         </div>
 
       </div>

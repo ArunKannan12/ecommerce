@@ -37,6 +37,8 @@ class ReturnRequestCreateAPIView(CreateAPIView):
 class ReturnRequestUpdateAPIView(UpdateAPIView):
     queryset = ReturnRequest.objects.all() 
     serializer_class = ReturnRequestSerializer 
+    lookup_field='id'
+    lookup_url_kwarg='returnId'
     def get_permissions(self): 
         role = getattr(self.request.user, 'role', None) 
         if role == 'admin': 
@@ -148,6 +150,13 @@ class ReturnRequestListAPIView(ListAPIView):
         if role == "customer":
             return ReturnRequest.objects.filter(user=user).order_by("-created_at")
 
+        elif role == "warehouse":
+            # Only return requests that have been collected by deliveryman and pending warehouse decision
+            return ReturnRequest.objects.filter(
+                pickup_status="collected",
+                warehouse_decision="pending"
+            ).order_by("-created_at")
+
         elif user.is_staff or role == "admin":
             queryset = ReturnRequest.objects.all().order_by("-created_at")
             status_param = self.request.query_params.get("status")
@@ -165,15 +174,22 @@ class ReturnRequestListAPIView(ListAPIView):
 class ReturnRequestDetailAPIView(RetrieveAPIView):
     queryset = ReturnRequest.objects.all()
     serializer_class = ReturnRequestSerializer
-
+    lookup_field = "id"
+    lookup_url_kwarg = "returnId"
+    
     def get_queryset(self):
         user = self.request.user
         role = getattr(user, "role", None)
         qs = ReturnRequest.objects.all()
+
         if role == "customer":
             return qs.filter(user=user)
-        elif role == "admin" or self.request.user.is_staff:
+        elif role == "warehouse":
+            # Warehouse can only see returns collected by deliveryman and pending warehouse decision
+            return qs.filter(pickup_status="collected", warehouse_decision="pending")
+        elif role == "admin" or user.is_staff:
             return qs
+
         return ReturnRequest.objects.none()
 
 

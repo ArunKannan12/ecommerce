@@ -10,7 +10,7 @@ from .utils import  calculate_delivery_charge,create_order_with_items
 from django.conf import settings
 import razorpay
 from django.utils import timezone
-
+from .signals import send_multichannel_notification
 
 def validate_shipping_address(user, shipping_input):
     """
@@ -185,24 +185,25 @@ def process_checkout(
     - Cart checkout
     - Buy Now
     - Existing order payment (existing_order)
-    
-    Returns a dict with keys:
-    - 'order': the Order instance
-    - 'response': the serialized response dict for API
-    """
-    razorpay_order = None  # ensure defined
 
-    # ---------------- Handle existing order ----------------
+    Returns a dict with:
+    - 'order': the Order instance
+    - 'response': serialized dict for API
+    """
+
+    razorpay_order = None  # placeholder for Razorpay order data
+
+    # ---------------- Existing order payment ----------------
     if existing_order:
         order = existing_order
 
-        # Update payment method if provided and different
+        # Update payment method if different
         if payment_method and order.payment_method != payment_method:
             validate_payment_method(payment_method)
             order.payment_method = payment_method
             order.save(update_fields=["payment_method"])
 
-        # Create Razorpay order only if unpaid and method is Razorpay
+        # Only create Razorpay order if not paid
         if not order.is_paid and order.payment_method == "Razorpay":
             if not order.razorpay_order_id:
                 client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
@@ -215,7 +216,6 @@ def process_checkout(
                 order.razorpay_order_id = razorpay_order.get("id")
                 order.save(update_fields=["razorpay_order_id"])
             else:
-                # reuse existing Razorpay order id
                 razorpay_order = {
                     "id": order.razorpay_order_id,
                     "amount": int(order.total * 100),
@@ -238,7 +238,7 @@ def process_checkout(
         promoter=promoter
     )
 
-    # ---------------- Handle Cash on Delivery ----------------
+    # ---------------- Cash on Delivery ----------------
     if order.payment_method == "Cash on Delivery":
         order.status = "pending"
         order.is_paid = False
@@ -247,10 +247,19 @@ def process_checkout(
         if is_cart and items:
             items.delete()
 
+        # Send order placed notification immediately for COD
+        send_multichannel_notification(
+            user=user,
+            order=order,
+            event="order_placed",
+            message=f"✅ Your order {order.order_number} has been placed successfully.",
+            channels=["email", "whatsapp"]
+        )
+
         response_data = prepare_order_response(order, razorpay_order=None)
         return {"order": order, "response": response_data}
 
-    # ---------------- Razorpay handling for new orders ----------------
+    # ---------------- Razorpay payment handling ----------------
     client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
     razorpay_order = client.order.create({
         "amount": int(order.total * 100),
@@ -260,6 +269,8 @@ def process_checkout(
     })
     order.razorpay_order_id = razorpay_order.get("id")
     order.save(update_fields=["razorpay_order_id", "payment_method"])
+
+    # DO NOT send notification yet — wait for payment verification
 
     response_data = prepare_order_response(order, razorpay_order)
     return {"order": order, "response": response_data}

@@ -9,4 +9,4 @@ class IsDeliveryManOrAdmin(BasePermission):
 
 class IsDeliveryMan(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and getattr(request.user, 'role', None) == 'deliveryman'
+        return request.user.is_authenticated and getattr(request.user, 'role', '') == 'deliveryman'

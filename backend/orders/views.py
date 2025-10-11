@@ -1,12 +1,11 @@
 from django.utils.dateparse import parse_date
 import logging
 from django_filters.rest_framework import DjangoFilterBackend
-
+from .signals import send_multichannel_notification
 from rest_framework.filters import SearchFilter
 from admin_dashboard.utils import  create_warehouse_log
 
-from .serializers import (OrderSerializer,
-                          ShippingAddressSerializer,
+from .serializers import (ShippingAddressSerializer,
                         CartCheckoutInputSerializer,
                         ReferralCheckoutInputSerializer,
                         OrderPreviewInputSerializer,
@@ -37,15 +36,9 @@ import razorpay
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 import logging
-from .utils import (create_order_with_items,
-                    
-                    validate_payment_method,
-                    process_refund)
+from .utils import (process_refund)
 
-from .helpers import( validate_shipping_address,
-                    prepare_order_response,
-                    process_checkout,
-                    validate_promoter,
+from .helpers import( process_checkout,
                     verify_razorpay_payment,
                     calculate_order_preview)
 
@@ -260,7 +253,14 @@ class RazorpayPaymentVerifyAPIView(APIView):
             user=request.user,
             client=client
         )
-
+        if result.get("status") == "success":
+            send_multichannel_notification(
+                user=order.user,
+                order=order,
+                event="order_placed",
+                message=f"✅ Your order {order.order_number} has been placed successfully.",
+                channels=["email", "whatsapp"]
+            )
         return Response(result)
 
 

@@ -1,8 +1,8 @@
 import axios from "axios";
 import { getCsrfToken } from "../utils/csrf";
 
-const BASE_URL = "https://ecommerce-ml5v.onrender.com/api";
-// const BASE_URL = "http://localhost:8000/api"
+// const BASE_URL = "https://ecommerce-ml5v.onrender.com/api";
+const BASE_URL = "http://localhost:8000/api"
 
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -42,21 +42,22 @@ axiosInstance.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry &&
-      !originalRequest.url.includes("/auth/jwt/refresh/")
-    ) {
+    // Skip retry for signup/login endpoints
+    const skipRetry = [
+      "/auth/jwt/refresh/",
+      "/auth/users/",        // signup
+      "/auth/jwt/create/",   // login
+    ].some((url) => originalRequest.url.includes(url));
+
+    if (error.response?.status === 401 && !originalRequest._retry && !skipRetry) {
       originalRequest._retry = true;
 
       try {
-        // ✅ raw axios for refresh
         await axios.post(`${BASE_URL}/auth/jwt/refresh/`, {}, { withCredentials: true });
-
-        // retry original request with instance
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         console.error("🔒 Token refresh failed:", refreshError);
+        // optionally clear auth state here
         return Promise.reject(refreshError);
       }
     }
@@ -64,5 +65,6 @@ axiosInstance.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 
 export default axiosInstance;
