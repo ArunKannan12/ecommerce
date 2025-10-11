@@ -12,7 +12,6 @@ import {
 const deliverySections = [
   { label: "Dashboard", to: "dashboard", icon: LayoutDashboard },
   { label: "Orders to Deliver", to: "orders-to-deliver", icon: Truck },
-  { label: "Completed Orders", to: "completed-orders", icon: Package },
   { label: "Returns", to: "returns", icon: Package },
   { label: "Replacements", to: "replacements", icon: Package },
 ];

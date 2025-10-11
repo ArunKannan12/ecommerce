@@ -49,8 +49,9 @@ const WarehouseOrders = lazy(()=>import("../components/warehousestaff/pages/Ware
 const OrderAssigning = lazy(()=> import ("../components/warehousestaff/pages/OrderAssigning.jsx"))
 const WarehouseReturns = lazy(()=>import('../components/warehousestaff/pages/WarehouseReturns.jsx'));
 const OrdersToDeliver =lazy(()=>import ("../components/deliveryman/pages/OrdersToDeliver.jsx")) ;
-
+const DeliverymanReturns = lazy(()=>import ("../components/deliveryman/pages/DeliverymanReturns.jsx")) ;
 const DeliveryManDashboardHome = lazy(()=>import('../components/deliveryman/pages/DeliveryManDashboardHome.jsx'))
+
 // 🌀 Suspense wrapper
 const withSuspense = (Component) => (
   <Suspense fallback={<LoadingScreen />}>{Component}</Suspense>
@@ -174,6 +175,7 @@ export const router = createBrowserRouter([
           {index:true,element:<Navigate to="dashboard" replace/>},
           {path:'dashboard',element:withSuspense(<DeliveryManDashboardHome/>)},
           {path:'orders-to-deliver',element:withSuspense(<OrdersToDeliver/>)},
+          {path:'returns',element:withSuspense(<DeliverymanReturns/>)}
         ]
        },
       { path: "/profile", element: withSuspense(<Profile />) },

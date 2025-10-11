@@ -147,30 +147,39 @@ class ReturnRequestListAPIView(ListAPIView):
         user = self.request.user
         role = getattr(user, "role", None)
 
+        # Get query param (comma-separated)
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            statuses = [s.strip().lower() for s in status_param.split(",")]
+        else:
+            statuses = None
+
         if role == "customer":
-            return ReturnRequest.objects.filter(user=user).order_by("-created_at")
-
+            qs = ReturnRequest.objects.filter(user=user)
+        elif role == "deliveryman":
+            deliveryman = DeliveryMan.objects.filter(user=user).first()
+            if not deliveryman:
+                return ReturnRequest.objects.none()
+            qs = ReturnRequest.objects.filter(order__delivered_by=deliveryman)
         elif role == "warehouse":
-            # Only return requests that have been collected by deliveryman and pending warehouse decision
-            return ReturnRequest.objects.filter(
-                pickup_status="collected",
-                warehouse_decision="pending"
-            ).order_by("-created_at")
-
+            qs = ReturnRequest.objects.filter(pickup_status__in=["collected", "pending"])
         elif user.is_staff or role == "admin":
-            queryset = ReturnRequest.objects.all().order_by("-created_at")
-            status_param = self.request.query_params.get("status")
-            if status_param:
-                queryset = queryset.filter(status=status_param)
-            order_number = self.request.query_params.get("order_number")
-            if order_number:
-                queryset = queryset.filter(order__order_number=order_number)
-            return queryset
+            qs = ReturnRequest.objects.all()
+        else:
+            return ReturnRequest.objects.none()
 
-        return ReturnRequest.objects.none()
+        # Apply status filter if provided
+        if statuses:
+            qs = qs.filter(status__in=statuses)
+
+        # Optional: filter by order_number
+        order_number = self.request.query_params.get("order_number")
+        if order_number:
+            qs = qs.filter(order__order_number=order_number)
+
+        return qs.order_by("-created_at")
 
 
-# views.py
 class ReturnRequestDetailAPIView(RetrieveAPIView):
     queryset = ReturnRequest.objects.all()
     serializer_class = ReturnRequestSerializer
@@ -184,14 +193,22 @@ class ReturnRequestDetailAPIView(RetrieveAPIView):
 
         if role == "customer":
             return qs.filter(user=user)
+        
+        elif role == "deliveryman":
+            deliveryman = DeliveryMan.objects.filter(user=user).first()
+            if not deliveryman:
+                return ReturnRequest.objects.none()
+            # Include both pending and collected so deliveryman can see updated status
+            return qs.filter(order__delivered_by=deliveryman, pickup_status__in=["pending", "collected"])
+        
         elif role == "warehouse":
-            # Warehouse can only see returns collected by deliveryman and pending warehouse decision
-            return qs.filter(pickup_status="collected", warehouse_decision="pending")
+            # Include all collected returns, maybe even rejected/damaged if needed
+            return qs.filter(pickup_status="collected")
+        
         elif role == "admin" or user.is_staff:
             return qs
 
         return ReturnRequest.objects.none()
-
 
 
 class RefundStatusAPIView(APIView):

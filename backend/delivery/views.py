@@ -322,14 +322,24 @@ class DeliveryDashboardAPIView(APIView):
 
 # -------------------------
 # Delivery Details
+
 class DeliveryDetailAPIView(APIView):
     permission_classes = [IsDeliveryMan]
 
     def get(self, request):
         deliveryman = get_object_or_404(DeliveryMan, user=request.user)
+
+        # Get optional status query param
+        status_param = request.query_params.get("status")
+        if status_param:
+            statuses = [s.strip() for s in status_param.split(",")]
+        else:
+            statuses = [OrderItemStatus.OUT_FOR_DELIVERY, OrderItemStatus.FAILED]
+
+        # Make sure we are using the constants for statuses
         order_items_qs = OrderItem.objects.filter(
             order__delivered_by=deliveryman,
-            status__in=['out_for_delivery', 'failed']
+            status__in=statuses
         ).select_related(
             'order', 'product_variant', 'order__user', 'order__shipping_address'
         ).prefetch_related(
@@ -338,10 +348,13 @@ class DeliveryDetailAPIView(APIView):
 
         orders = build_orders_dict(order_items_qs)
 
-        # Optional: add more info per item if needed
+        # Add pending OTP info per item
         for order in orders:
             for item in order['items']:
-                item['can_send_otp'] = item['pending_otp']
+                item['can_send_otp'] = any(
+                    n.event == 'otp_delivery' and not n.otp_verified for n in item.get('notifications', [])
+                )
 
         return Response({"orders": orders})
+
 
